@@ -303,6 +303,7 @@
     --color-sonner-error: var(--destructive-background);
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
     --color-color-yellow-900: var(----color-yellow-900);
     --color-color-yellow-800: var(----color-yellow-800);
     --color-color-yellow-700: var(----color-yellow-700);
