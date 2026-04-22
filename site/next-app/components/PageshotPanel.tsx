@@ -45,6 +45,7 @@ import {
   type Viewport,
 } from './ViewportToggle';
 import { HeightToggle, type HeightPreset } from './HeightToggle';
+import { trimBottomPadding } from '../lib/trim-image';
 
 // -----------------------------------------------------------------------------
 // Status-line copy (§ 4c-4 "Status line copy")
@@ -226,16 +227,25 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       }
 
       const capturedAt = new Date();
-      const captures: Capture[] = results.map((r) => {
-        if (r.body.ok !== true) throw new Error('unreachable');
-        return {
-          viewport: r.viewport,
-          imageBase64: r.body.image,
-          siteName,
-          pageName,
-          capturedAt,
-        };
-      });
+      // Auto-trim trailing whitespace/background padding. The Agent API
+      // returns an image of exactly the requested height, so shorter pages
+      // come back with solid-color padding at the bottom. `trimBottomPadding`
+      // detects that and crops it out. Failure modes (no canvas, no padding
+      // detected, too-aggressive trim) return the original bytes unchanged.
+      const trimmedBodies = await Promise.all(
+        results.map(async (r) => {
+          if (r.body.ok !== true) throw new Error('unreachable');
+          const imageBase64 = await trimBottomPadding(r.body.image);
+          return { viewport: r.viewport, imageBase64 };
+        }),
+      );
+      const captures: Capture[] = trimmedBodies.map((r) => ({
+        viewport: r.viewport,
+        imageBase64: r.imageBase64,
+        siteName,
+        pageName,
+        capturedAt,
+      }));
 
       dispatch({ type: 'resolved', captures });
     } catch {
