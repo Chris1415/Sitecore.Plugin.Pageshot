@@ -17,8 +17,8 @@
       "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v2.md",
       "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v3.md"
     ],
-    "selected_variant_path": null,
-    "selected_poc_path": null
+    "selected_variant_path": "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v2.md",
+    "selected_poc_path": "products/pageshot/pocs/poc-v2"
   },
   "source": {
     "kind": "raw_idea",
@@ -67,6 +67,14 @@
       "exited_at": "2026-04-22T07:30:37Z",
       "outcome": "completed",
       "error": null
+    },
+    {
+      "stage": "ui_ready",
+      "agent": "05-ui-designer",
+      "entered_at": "2026-04-22T07:30:37Z",
+      "exited_at": "2026-04-22T07:30:37Z",
+      "outcome": "completed",
+      "error": null
     }
   ],
   "implementation": {
@@ -85,6 +93,8 @@
     "critical_review: completed",
     "prd_input_mode: prompt_only",
     "planning_track: minimal (architecture blueprint file omitted; ADRs capture decisions from PRD)",
-    "architecture decisions recorded: ADR-0002 (iframe+proxy), ADR-0003 (no local HTTPS), ADR-0004 (Next.js+Node), ADR-0005 (custom app), ADR-0006 (stateless)"
+    "architecture decisions recorded: ADR-0002 (iframe+proxy), ADR-0003 (no local HTTPS), ADR-0004 (Next.js+Node), ADR-0005 (custom app), ADR-0006 (stateless)",
+    "ui_design: 3 proposals at radical divergence — Graphite Console (v1), Shutterbug (v2, winner), Passepartout (v3)",
+    "winning direction: Shutterbug (v2). POC at products/pageshot/pocs/poc-v2/ is the visual source of truth for implementation."
   ]
 }
