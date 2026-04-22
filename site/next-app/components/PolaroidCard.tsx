@@ -77,6 +77,12 @@ export type PolaroidCardProps =
       siteName: string;
       pageName: string;
       capturedAt: Date;
+      /**
+       * When `true`, the image slot has no height cap — the polaroid grows
+       * to fit the full screenshot inline. When `false` (default), the
+       * slot is capped at 420 px and scrolls internally for tall pages.
+       */
+      expanded?: boolean;
     }
   | {
       kind: 'error';
@@ -153,22 +159,17 @@ export function PolaroidCard(props: PolaroidCardProps) {
   );
 
   if (props.kind === 'ready') {
-    const { imageBase64, siteName, pageName, capturedAt } = props;
+    const { imageBase64, siteName, pageName, capturedAt, expanded = false } = props;
     const altText = `Screenshot of page ${pageName} on ${siteName}, captured ${capturedAt.toLocaleString()}`;
+    // Compact (default): 420 px cap + scrollable for tall pages.
+    // Expanded: no cap, polaroid grows to the image's natural height.
+    // In both states Copy + Download ship the same full-resolution PNG.
+    const imageSlotClass = expanded
+      ? 'overflow-hidden rounded-2xl bg-stone-100'
+      : 'max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl bg-stone-100';
     return (
       <div data-testid="polaroid-root" className={rootClassName}>
-        {/*
-         * Image slot: the Agent API returns full-page screenshots (tall!),
-         * so the slot no longer forces a fixed 4:3 aspect. Instead:
-         *   - `max-h-[420px]` caps the thumbnail height so stacking two
-         *     captures doesn't run off-screen.
-         *   - `overflow-y-auto` makes the full image scrollable in place
-         *     when it exceeds the cap — the editor still sees the whole
-         *     page without the panel growing indefinitely.
-         *   - The actual Copy + Download actions ship the full-resolution
-         *     image regardless of preview framing.
-         */}
-        <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl bg-stone-100">
+        <div data-testid="polaroid-image-slot" className={imageSlotClass}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`data:image/png;base64,${imageBase64}`}

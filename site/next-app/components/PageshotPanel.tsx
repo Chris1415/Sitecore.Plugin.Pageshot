@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 import {
   ANNOUNCEMENTS,
@@ -394,6 +395,7 @@ interface CaptureBlockProps {
 
 function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
   const announce = useAnnounce();
+  const [expanded, setExpanded] = useState<boolean>(false);
   const {
     available: clipboardAvailable,
     status: copyStatus,
@@ -443,6 +445,31 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
     >
       <div className="flex items-center justify-between px-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">
         <span>{VIEWPORT_LABELS[capture.viewport]}</span>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-pressed={expanded}
+          aria-label={
+            expanded
+              ? `Collapse ${VIEWPORT_LABELS[capture.viewport]} preview`
+              : `Expand ${VIEWPORT_LABELS[capture.viewport]} preview to full page`
+          }
+          data-testid={`expand-toggle-${capture.viewport}`}
+          className={[
+            'flex items-center gap-1 rounded-full px-2 py-0.5 font-medium normal-case tracking-normal transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:ring-offset-amber-50',
+            expanded
+              ? 'bg-amber-400 text-stone-900'
+              : 'text-stone-600 hover:bg-amber-50',
+          ].join(' ')}
+        >
+          {expanded ? (
+            <Minimize2 aria-hidden="true" className="h-3 w-3" />
+          ) : (
+            <Maximize2 aria-hidden="true" className="h-3 w-3" />
+          )}
+          <span>{expanded ? 'Collapse' : 'Expand'}</span>
+        </button>
       </div>
       <PolaroidCard
         kind="ready"
@@ -450,6 +477,7 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
         siteName={capture.siteName}
         pageName={capture.pageName}
         capturedAt={capture.capturedAt}
+        expanded={expanded}
       />
       <div
         data-testid={`action-bar-${capture.viewport}`}
