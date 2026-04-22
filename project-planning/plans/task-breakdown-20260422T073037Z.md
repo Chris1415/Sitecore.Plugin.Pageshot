@@ -32,7 +32,7 @@ This build is also a **dogfood** of the agentic framework: it exercises the full
 
 **Visual source of truth:** the Shutterbug direction (v2) — warm cream palette + amber hero shutter + polaroid preview card. The winning POC clickdummy at `products/pageshot/pocs/poc-v2/index.html` overrides the spec on visual tie-breaks per § 7 of the design spec.
 
-**Architecture shape:** client-side iframe UI in a Next.js App Router app + **one** Node-runtime route handler (`/api/screenshot/[pageId]`) that holds `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET`. No database, no persisted captures, no local HTTPS.
+**Architecture shape:** client-side iframe UI in a Next.js App Router app + **one** Node-runtime route handler (`/api/screenshot/[pageId]`) that holds `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET`. No database, no persisted captures, no local HTTPS.
 
 ---
 
@@ -122,9 +122,9 @@ This build is also a **dogfood** of the agentic framework: it exercises the full
 - **Depends on:** T002
 
 #### T006 — Add env-var placeholders and `.env.local` stub
-- **Title:** Create `.env.local` with `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET` placeholders.
+- **Title:** Create `.env.local` with `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET` placeholders.
 - **Description:** The Developer follows the credential-acquisition protocol (`auth.md § 0`). Ask the user for `client_id` / `client_secret`; if user has none, fall back to reading the repo root `.env`; if still empty, leave placeholders blank and report as a missing piece (per § 4c-6 protocol). DO NOT invent values. Also document that both vars are **server-only** (no `NEXT_PUBLIC_` prefix) in `.env.example` and update `.gitignore` to cover `.env.local` (scaffold already does this — verify).
-- **Expected Output:** `products/pageshot/site/next-app/.env.local` exists. Contains `SITECORE_CLIENT_ID=<value-or-blank>` and `SITECORE_CLIENT_SECRET=<value-or-blank>`. `.env.example` committed with blank placeholders. Developer reports whether real values were acquired.
+- **Expected Output:** `products/pageshot/site/next-app/.env.local` exists. Contains `SITECORE_DEPLOY_CLIENT_ID=<value-or-blank>` and `SITECORE_DEPLOY_CLIENT_SECRET=<value-or-blank>`. `.env.example` committed with blank placeholders. Developer reports whether real values were acquired.
 - **Depends on:** T002
 
 ---
@@ -179,7 +179,7 @@ Coverage originally planned for T009 is now provided by **T007a** (RED) + T007b 
 - **Description:** Create `app/api/screenshot/[pageId]/route.ts`:
   - `export const runtime = "nodejs"` (ADR-0004 — NOT edge).
   - Export `GET(request, { params })`. Validate `params.pageId` is a non-empty string; otherwise return `{ ok: false, error: { code: 'not_found', message: '…' } }` with HTTP 400.
-  - Check `SITECORE_CLIENT_ID` + `SITECORE_CLIENT_SECRET` are present; if missing, return `auth` envelope with HTTP 500 (FR-13).
+  - Check `SITECORE_DEPLOY_CLIENT_ID` + `SITECORE_DEPLOY_CLIENT_SECRET` are present; if missing, return `auth` envelope with HTTP 500 (FR-13).
   - Call `getSitecoreToken()`. Fetch `GET https://edge-platform.sitecorecloud.io/stream/ai-agent-api/api/v1/pages/{pageId}/screenshot` with `Authorization: Bearer <jwt>` and `Accept: application/json`.
   - **401 retry:** on `401`, call `invalidateSitecoreToken()` once, call `getSitecoreToken()` again, retry the Agent API call exactly once. If second attempt also 401, map to `auth` envelope. Do NOT retry more than once (FR-06, `auth.md § 6`).
   - Map Agent API responses to the `ScreenshotResponse` envelope from PRD § 10 / § 4c-6. Success body `{ ok: true, image: <base64> }` (Agent API returns base64 — see PRD FR-05).
@@ -399,7 +399,7 @@ Coverage originally planned for T012 is now written **before** T011b (as T011a).
 
 #### T026 — Deploy to Vercel (preview branch)
 - **Title:** Push branch, get Vercel preview URL, set preview env vars.
-- **Description:** In Vercel project "pageshot" (create if missing; project name matches OQ-3 resolution): link repo, select `products/pageshot/site/next-app` as the app root. Set preview-scope env vars `SITECORE_CLIENT_ID` and `SITECORE_CLIENT_SECRET` (server-only, no `NEXT_PUBLIC_` prefix). Push a branch to trigger a preview deploy; capture the preview URL (format `https://pageshot-<branch>-<team>.vercel.app`).
+- **Description:** In Vercel project "pageshot" (create if missing; project name matches OQ-3 resolution): link repo, select `products/pageshot/site/next-app` as the app root. Set preview-scope env vars `SITECORE_DEPLOY_CLIENT_ID` and `SITECORE_DEPLOY_CLIENT_SECRET` (server-only, no `NEXT_PUBLIC_` prefix). Push a branch to trigger a preview deploy; capture the preview URL (format `https://pageshot-<branch>-<team>.vercel.app`).
 - **Expected Output:** A Vercel preview URL is live on HTTPS and responds 200 on `/panel`. Env vars present in preview scope.
 - **Depends on:** T025
 
@@ -411,7 +411,7 @@ Coverage originally planned for T012 is now written **before** T011b (as T011a).
 
 #### T028 — Register **production** custom app + production Vercel env vars
 - **Title:** Create a `PageShot` (production) custom app in Cloud Portal pointing at the Vercel production URL.
-- **Description:** Push `main` to trigger a production deploy. Set production-scope env vars `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET` (may differ from preview values if the tenant uses different automation clients). Cloud Portal → create a second custom app called `PageShot`, extension point Page Builder Context Panel, panel URL = Vercel production URL `/panel`, minimized API access scopes. Install into the production target tenant.
+- **Description:** Push `main` to trigger a production deploy. Set production-scope env vars `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET` (may differ from preview values if the tenant uses different automation clients). Cloud Portal → create a second custom app called `PageShot`, extension point Page Builder Context Panel, panel URL = Vercel production URL `/panel`, minimized API access scopes. Install into the production target tenant.
 - **Expected Output:** Two Cloud Portal custom apps (`PageShot — TEST` + `PageShot`), each installed in its respective environment. Production app loads from the Vercel production URL.
 - **Depends on:** T027
 
@@ -468,7 +468,7 @@ This section names the most important behavioral checks narratively. **The exhau
 - **Double 401:** two 401s → `{ error: { code: 'auth' } }`; no third call (§ 10 → T011a-TEST-3).
 - **404** → `not_found` envelope (§ 10 → T011a-TEST-4; AC-4.3 / AC-5.2).
 - **5xx / timeout / fetch reject** map to `upstream_unavailable` / `network` respectively (§ 10 → T011a-TEST-5, T011a-TEST-6; AC-5.3 / AC-5.4).
-- **Missing env:** blank `SITECORE_CLIENT_ID` → `auth` envelope without hitting auth endpoint (§ 10 → T011a-TEST-7; FR-13, R-6).
+- **Missing env:** blank `SITECORE_DEPLOY_CLIENT_ID` → `auth` envelope without hitting auth endpoint (§ 10 → T011a-TEST-7; FR-13, R-6).
 - **Bad pageId:** empty string / non-string → HTTP 400 + `not_found` (§ 10 → T011a-TEST-8).
 - **Secret never in response / never logged** (§ 10 → T011a-TEST-9; NFR-S-01, NFR-O-01).
 - **Tenant identifier logged on first successful auth** (§ 10 → T011a-TEST-10; R-6).
@@ -505,7 +505,7 @@ This section names the most important behavioral checks narratively. **The exhau
 
 ### 4c-1. Non-negotiable technical boundaries
 
-- **Secrets are server-side only.** `SITECORE_CLIENT_ID` and `SITECORE_CLIENT_SECRET` live in server-runtime environment only. They are read exclusively inside `app/api/screenshot/[pageId]/route.ts` and `lib/sitecore-token.ts`. The panel (any file under `app/panel/**` or `components/**`) must never reference these vars — **ADR-0002**, FR-04, NFR-S-01.
+- **Secrets are server-side only.** `SITECORE_DEPLOY_CLIENT_ID` and `SITECORE_DEPLOY_CLIENT_SECRET` live in server-runtime environment only. They are read exclusively inside `app/api/screenshot/[pageId]/route.ts` and `lib/sitecore-token.ts`. The panel (any file under `app/panel/**` or `components/**`) must never reference these vars — **ADR-0002**, FR-04, NFR-S-01.
 - **Never prefix these env vars with `NEXT_PUBLIC_`.** That would inline them into the client bundle — ADR-0002.
 - **Stateless — no database, no persisted captures.** No Postgres, no KV, no Redis, no Blob, no Vercel Blob. Images live in React state and the user's clipboard / Downloads folder. Token cache is in-memory only — **ADR-0006**, NFR-S-03.
 - **No local HTTPS.** Do NOT set up mkcert, do NOT add `--experimental-https` to the dev script. Local dev is HTTP on `:3000` for UI iteration only; iframe testing runs against Vercel preview URLs — **ADR-0003**.
@@ -583,8 +583,8 @@ Note the dev script does NOT include `--experimental-https` (ADR-0003).
 
 **Env vars (server-only, NOT `NEXT_PUBLIC_*`):**
 ```
-SITECORE_CLIENT_ID=<from Cloud Portal automation client — ask user per auth.md § 0>
-SITECORE_CLIENT_SECRET=<from Cloud Portal automation client — ask user per auth.md § 0>
+SITECORE_DEPLOY_CLIENT_ID=<from Cloud Portal automation client — ask user per auth.md § 0>
+SITECORE_DEPLOY_CLIENT_SECRET=<from Cloud Portal automation client — ask user per auth.md § 0>
 ```
 
 **Tailwind token extensions (add to `tailwind.config.ts`):**
@@ -1118,7 +1118,7 @@ All scenarios below are **behavioral** — each one asserts an observable, exter
 - **File:** `app/api/screenshot/[pageId]/route.test.ts`
 
 #### T011a-TEST-7 — Missing env vars → `{ code: 'auth' }` without hitting auth endpoint
-- **Scenario:** `SITECORE_CLIENT_ID` is blank at route invocation.
+- **Scenario:** `SITECORE_DEPLOY_CLIENT_ID` is blank at route invocation.
 - **Expected:** Response body `{ ok: false, error: { code: 'auth', message: 'Administrator must configure credentials.' } }` with HTTP 500. `fetch` is NOT called (no request to `/oauth/token` or the Agent API). (FR-13 / R-6.)
 - **Test type:** integration
 - **File:** `app/api/screenshot/[pageId]/route.test.ts`
@@ -1131,9 +1131,9 @@ All scenarios below are **behavioral** — each one asserts an observable, exter
 
 #### T011a-TEST-9 — NFR-S-01 secret never appears in route response
 - **Scenario:** Given any of the above scenarios, serialize the response body to a string.
-- **Expected:** The serialized body does NOT contain the substring `client_secret`, does NOT contain the literal value of `SITECORE_CLIENT_SECRET` (set via test env), and does NOT contain any access token. Applies to both success and error paths.
+- **Expected:** The serialized body does NOT contain the substring `client_secret`, does NOT contain the literal value of `SITECORE_DEPLOY_CLIENT_SECRET` (set via test env), and does NOT contain any access token. Applies to both success and error paths.
 - **Test type:** integration (assert across all scenarios, table-driven)
-- **File:** `app/api/screenshot/[pageId]/route.test.ts` (+ optional ESLint rule `no-restricted-syntax` preventing client-side import of `process.env.SITECORE_CLIENT_SECRET` — build-time guard)
+- **File:** `app/api/screenshot/[pageId]/route.test.ts` (+ optional ESLint rule `no-restricted-syntax` preventing client-side import of `process.env.SITECORE_DEPLOY_CLIENT_SECRET` — build-time guard)
 
 #### T011a-TEST-10 — Tenant identifier logged on first success, never the secret
 - **Scenario:** Golden path + observe `console.log` / structured logger calls.

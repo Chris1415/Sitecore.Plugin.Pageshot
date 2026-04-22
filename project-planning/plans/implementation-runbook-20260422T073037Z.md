@@ -43,7 +43,7 @@ Per task breakdown § 5. Sequential; no parallelization (TDD mandate). RED → G
 
 | Milestone | Tasks | Summary |
 |---|---|---|
-| **M1 — Scaffold + skeletons** | E1: T001 → T002 → T003 (+ T003-TEST-1) → T004 (+ T004-TEST-1) → T005 → T006 | Marketplace custom-app scaffold per `skills/sitecore/setup/scaffold.md` + `marketplace-sdk/lifecycle.md`. Next.js 15 App Router, TypeScript strict, Tailwind, Vitest + Playwright setup. `.env.local.example` with `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET` placeholders. `.gitignore` covers `.env.local`. Shared mocks (`mockFetch`, `mockClipboard`, `mockMatchMedia`) added for § 11 fixtures. |
+| **M1 — Scaffold + skeletons** | E1: T001 → T002 → T003 (+ T003-TEST-1) → T004 (+ T004-TEST-1) → T005 → T006 | Marketplace custom-app scaffold per `skills/sitecore/setup/scaffold.md` + `marketplace-sdk/lifecycle.md`. Next.js 15 App Router, TypeScript strict, Tailwind, Vitest + Playwright setup. `.env.local.example` with `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET` placeholders. `.gitignore` covers `.env.local`. Shared mocks (`mockFetch`, `mockClipboard`, `mockMatchMedia`) added for § 11 fixtures. |
 | **M2 — Capture round-trip works** | E2: T007a → T007b → T008 — E3: T010a → T010b → T011a → T011b | Marketplace SDK Provider + `pages.context` subscription. Token cache (`lib/sitecore-token.ts`) with 60 s safety margin + stampede protection. Route handler `app/api/screenshot/[pageId]/route.ts` with 401 retry-once + full error-code envelope. Credentials loaded from `.env.local` server-side only. |
 | **M3 — Shutterbug UI complete** | E4: T013 → T014 → T015 → T016 → T017 → T018 → T019 → T020 → T021 → T022 → T023 → T024 → T025 (and `a`/`b` test-first splits per task breakdown) | State-machine reducer, `ShutterButton` with spring-scale + capture bloom + aperture spin, `PolaroidCard` preview + ledge, `ActionPill` for Copy/Download/Retry, elapsed-time controller, keyboard+focus map, ARIA live-region announcer, `prefers-reduced-motion` fallback, filename sanitization (+ download action), Copy-to-clipboard (+ denied fallback), inline error message mapping. Integration tests at panel level (T025). |
 | **M4 — Deployed & registered + dogfood logged** | E5: T026 → T027 → T028 — E6: T029 → T030 | Vercel deployment configuration; test custom app + production custom app registered in Cloud Portal; env vars wired in Vercel. End-to-end smoke test on Vercel preview URL. Run logged to `.agent/skills/sitecore/marketplace-sdk/CATALOG.md` with any friction captured as patch-queue entries. |
@@ -58,7 +58,7 @@ Before declaring implementation complete:
 - [ ] `pnpm test` (Vitest) passes; all unit + integration + component tests green.
 - [ ] `pnpm test:e2e` (Playwright) — at least the golden-path smoke green, OR explicitly note E2E deferred.
 - [ ] No `client_secret` reachable from any client bundle (grep the `.next/static/` output for secret-like patterns; NFR-S-01 assertion).
-- [ ] `.env.local` contains real `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET`; `.env.local.example` documents the vars with placeholders only.
+- [ ] `.env.local` contains real `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET`; `.env.local.example` documents the vars with placeholders only.
 - [ ] Vercel preview URL tested inside a real Sitecore Pages editor iframe; successful screenshot captured; Copy + Download both work.
 - [ ] Run logged in `.agent/skills/sitecore/marketplace-sdk/CATALOG.md` with patch candidates.
 

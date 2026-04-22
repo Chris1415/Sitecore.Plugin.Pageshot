@@ -23,7 +23,7 @@ Add a one-button "Capture screenshot" control to Pages via a **Marketplace custo
 
 ## Non-negotiables
 
-- **Secrets never in browser.** `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET` live only in server env; a Next.js route handler proxies the Agent API call. See **ADR-0002**.
+- **Secrets never in browser.** `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET` live only in server env; a Next.js route handler proxies the Agent API call. See **ADR-0002**.
 - **SDK-first rule.** Page context comes from `@sitecore-marketplace-sdk/client` `pages.context` subscription — not from Agent API site/page lookups. Direct Agent API use is confined to the `/screenshot` call, which has no SDK wrapper.
 - **Follow `auth.md § 0`** credential-acquisition protocol when setting up OAuth: ask user upfront, fall back to `.env.local`, leave blank + report if missing. Never invent placeholder credentials.
 - **Stateless.** No database, no persisted images, no telemetry pipeline. Transient React state + server-memory token cache only.

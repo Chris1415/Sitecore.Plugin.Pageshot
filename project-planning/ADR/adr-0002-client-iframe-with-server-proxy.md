@@ -21,7 +21,7 @@ PageShot is built as a **client-side iframe Marketplace custom app** (per `marke
 - The panel UI is pure client-side, loaded as an iframe by Sitecore Pages.
 - Page context (`pageId`, `siteName`, `pageName`) comes from `@sitecore-marketplace-sdk/client`'s `pages.context` subscription.
 - On Capture click, the panel calls **its own** server route (`/api/screenshot/[pageId]`) — it never calls `auth.sitecorecloud.io` or `edge-platform.sitecorecloud.io` directly from the browser.
-- The route handler: (a) loads `SITECORE_CLIENT_ID` / `SITECORE_CLIENT_SECRET` from server env only, (b) obtains or reuses a cached JWT per the token-cache pattern in `.agent/skills/sitecore/apis/sitecoreai/auth.md § 5`, (c) calls the Agent API with the bearer token, (d) returns the base64 image or an error envelope.
+- The route handler: (a) loads `SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET` from server env only, (b) obtains or reuses a cached JWT per the token-cache pattern in `.agent/skills/sitecore/apis/sitecoreai/auth.md § 5`, (c) calls the Agent API with the bearer token, (d) returns the base64 image or an error envelope.
 - The route runs on the **Node runtime** (not Edge), because `node:crypto` and server-memory caching are both simpler there, and the screenshot endpoint's latency makes edge-runtime benefits irrelevant.
 
 ## Consequences
