@@ -5,10 +5,10 @@
   "updated_at": "2026-04-22T07:30:37Z",
   "product_slug": "pageshot",
   "product_root": "products/pageshot",
-  "status": "plan_ready",
+  "status": "qa_ready",
   "prd_input_mode": "prompt_only",
   "platform_target": "marketplace",
-  "task_breakdown_style": "standard",
+  "task_breakdown_style": "tdd",
   "ui_design": {
     "proposal_count": 3,
     "divergence": "radical",
@@ -83,6 +83,14 @@
       "exited_at": "2026-04-22T07:30:37Z",
       "outcome": "completed",
       "error": null
+    },
+    {
+      "stage": "qa_ready",
+      "agent": "07-qa-specialist",
+      "entered_at": "2026-04-22T07:30:37Z",
+      "exited_at": "2026-04-22T07:30:37Z",
+      "outcome": "completed",
+      "error": null
     }
   ],
   "implementation": {
@@ -103,6 +111,7 @@
     "planning_track: minimal (architecture blueprint file omitted; ADRs capture decisions from PRD)",
     "architecture decisions recorded: ADR-0002 (iframe+proxy), ADR-0003 (no local HTTPS), ADR-0004 (Next.js+Node), ADR-0005 (custom app), ADR-0006 (stateless)",
     "ui_design: 3 proposals at radical divergence — Graphite Console (v1), Shutterbug (v2, winner), Passepartout (v3)",
-    "winning direction: Shutterbug (v2). POC at products/pageshot/pocs/poc-v2/ is the visual source of truth for implementation."
+    "winning direction: Shutterbug (v2). POC at products/pageshot/pocs/poc-v2/ is the visual source of truth for implementation.",
+    "task_breakdown: 30 tasks pre-QA → split to RED/GREEN pairs post-QA; § 4c all 7 subsections filled; § 9 TDD contract + § 10 75 test specs + § 11 fixtures added; task_breakdown_style: tdd"
   ]
 }
