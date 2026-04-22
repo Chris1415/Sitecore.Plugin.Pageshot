@@ -82,25 +82,40 @@ function errorEnvelope(
 }
 
 /**
- * Viewport presets — translate the client's `viewport=mobile|desktop` query
- * param into the Agent API's `width` + `height` query params.
+ * Viewport + height presets — translate the client's `viewport=mobile|desktop`
+ * and `height=small|medium|large|full` query params into the Agent API's
+ * `width` + `height` query params.
  *
- * Redeclared here rather than imported from `components/ViewportToggle.tsx`:
- * that file carries `'use client'` and pulls React into its module graph;
- * the Node-runtime route handler must not depend on it.
+ * Confirmed empirically (T029 dogfood): the Agent API treats `height` as the
+ * EXACT output-image height — not a viewport hint, not a minimum. There's
+ * no `fullPage` toggle. The `fullPage: true` flag in the response body is
+ * informational only. The editor picks a height tall enough for their page
+ * via the HeightToggle UI. See dogfood friction log.
  */
-const VIEWPORT_PRESETS = {
-  mobile: { width: 375, height: 812 },
-  desktop: { width: 1200, height: 800 },
+const VIEWPORT_WIDTHS = {
+  mobile: 375,
+  desktop: 1200,
 } as const;
 
-function resolveViewportDims(raw: string | null): {
-  width: number;
-  height: number;
-} {
-  if (raw === 'mobile') return VIEWPORT_PRESETS.mobile;
-  // desktop is the default — applies on missing, unknown, or explicit "desktop".
-  return VIEWPORT_PRESETS.desktop;
+const HEIGHT_PRESETS = {
+  small: 800,
+  medium: 2000,
+  large: 4000,
+  full: 8000,
+} as const;
+
+type HeightPresetKey = keyof typeof HEIGHT_PRESETS;
+
+function resolveWidth(raw: string | null): number {
+  if (raw === 'mobile') return VIEWPORT_WIDTHS.mobile;
+  return VIEWPORT_WIDTHS.desktop;
+}
+
+function resolveHeight(raw: string | null): number {
+  if (raw && raw in HEIGHT_PRESETS) {
+    return HEIGHT_PRESETS[raw as HeightPresetKey];
+  }
+  return HEIGHT_PRESETS.large;
 }
 
 async function callAgentApi(
@@ -108,15 +123,12 @@ async function callAgentApi(
   token: string,
   dims: { width: number; height: number },
 ): Promise<Response> {
-  // Agent API `/screenshot` query params (per OpenAPI bundle):
-  //   version:  required integer — content version to render (using 1 until
-  //             we surface a version selector; see dogfood friction log).
-  //   width:    rendered viewport width in pixels (default 1200).
-  //   height:   rendered viewport height in pixels (default 800).
-  //   language: locale code (default 'en') — not exposed in v1.
-  // Response shape: { type, fullPage, encoding, timestamp, screenshot_base64 }.
-  // Both of these (the response field name + `version` being required) are
-  // undocumented in the current agent-api.md skill — dogfood patch candidates.
+  // Agent API `/screenshot` query params (confirmed empirically + OpenAPI):
+  //   version: required integer. Using 1 until we surface a version selector.
+  //   width:   rendered viewport width (also controls output image width).
+  //   height:  EXACT output-image height in pixels. Page content beyond this
+  //            is cropped; shorter pages get whitespace padding. No fullPage
+  //            toggle exists; user picks a preset via the HeightToggle UI.
   const qs = new URLSearchParams({
     version: '1',
     width: String(dims.width),
@@ -160,10 +172,13 @@ export async function GET(
     return errorEnvelope('not_found', 400);
   }
 
-  // Parse viewport preset from the request query string. Unknown / missing
-  // → desktop default (1200x800).
-  const viewport = new URL(req.url).searchParams.get('viewport');
-  const dims = resolveViewportDims(viewport);
+  // Parse viewport + height presets from the request query string.
+  // Defaults: desktop width (1200) + large height (4000).
+  const params = new URL(req.url).searchParams;
+  const dims = {
+    width: resolveWidth(params.get('viewport')),
+    height: resolveHeight(params.get('height')),
+  };
 
   // Obtain a token up front. A missing env raises SitecoreTokenConfigError
   // from the cache WITHOUT issuing any network request (FR-13 / T011a-TEST-7).

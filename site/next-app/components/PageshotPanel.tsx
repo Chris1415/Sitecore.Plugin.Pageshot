@@ -44,6 +44,7 @@ import {
   VIEWPORT_LABELS,
   type Viewport,
 } from './ViewportToggle';
+import { HeightToggle, type HeightPreset } from './HeightToggle';
 
 // -----------------------------------------------------------------------------
 // Status-line copy (§ 4c-4 "Status line copy")
@@ -91,6 +92,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
   const announce = useAnnounce();
 
   const [viewports, setViewports] = useState<Viewport[]>(['desktop']);
+  const [height, setHeight] = useState<HeightPreset>('large');
 
   // Focus refs. `firstCopyRef` receives the Copy pill from the FIRST capture
   // block after ready — mount it below via a callback so the CaptureBlock
@@ -206,7 +208,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       const results = await Promise.all(
         selected.map(async (viewport) => {
           const response = await doFetch(
-            `/api/screenshot/${encodeURIComponent(pageId)}?viewport=${viewport}`,
+            `/api/screenshot/${encodeURIComponent(pageId)}?viewport=${viewport}&height=${height}`,
           );
           const body = (await response.json()) as ScreenshotEnvelope;
           return { viewport, body };
@@ -243,7 +245,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         message: 'Check your connection, then try again.',
       });
     }
-  }, [dispatch, fetchImpl, pages, viewports]);
+  }, [dispatch, fetchImpl, height, pages, viewports]);
 
   const handleRetryPress = useCallback(() => {
     void issueCapture();
@@ -323,6 +325,12 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       <ViewportToggle
         value={viewports}
         onChange={setViewports}
+        disabled={state.kind === 'capturing'}
+      />
+
+      <HeightToggle
+        value={height}
+        onChange={setHeight}
         disabled={state.kind === 'capturing'}
       />
 

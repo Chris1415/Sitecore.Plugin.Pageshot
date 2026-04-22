@@ -180,7 +180,7 @@ describe('T011a-TEST-1 — happy path returns { ok: true, image }', () => {
     const parsedUrl = new URL(agentCalls[0]!.url);
     expect(parsedUrl.searchParams.get('version')).toBe('1');
     expect(parsedUrl.searchParams.get('width')).toBe('1200');
-    expect(parsedUrl.searchParams.get('height')).toBe('800');
+    expect(parsedUrl.searchParams.get('height')).toBe('4000');
 
     // Authorization header + Accept header per § 4c-6.
     const agentHeaders = new Headers(agentCalls[0]!.init?.headers);
