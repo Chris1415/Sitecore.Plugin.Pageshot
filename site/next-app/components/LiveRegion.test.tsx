@@ -37,6 +37,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 import {
@@ -59,6 +60,23 @@ function Wrapper({ children }: { children: ReactNode }) {
       {children}
     </LiveRegionProvider>
   );
+}
+
+/**
+ * Capture the `announce` callback from a consumer into a holder object —
+ * using a mutable object field (not a `let` rebind) keeps the react-hooks
+ * purity linter happy. The consumer writes the callback in a post-commit
+ * effect so render stays pure.
+ */
+interface AnnounceHolder {
+  current: (msg: string) => void;
+}
+function AnnounceConsumer({ holderRef }: { holderRef: AnnounceHolder }) {
+  const announce = useAnnounce();
+  useEffect(() => {
+    holderRef.current = announce;
+  }, [announce, holderRef]);
+  return null;
 }
 
 // -----------------------------------------------------------------------------
@@ -86,16 +104,11 @@ describe('T023a-TEST-1 — renders role="status" + aria-live="polite" + .sr-only
 // -----------------------------------------------------------------------------
 describe('T023a-TEST-2 — announce() updates the region text content', () => {
   it('transitions the region text from empty → "Hello" → "World"', () => {
-    let announce: (msg: string) => void = () => undefined;
-
-    function Consumer() {
-      announce = useAnnounce();
-      return null;
-    }
+    const holderRef: AnnounceHolder = { current: () => undefined };
 
     render(
       <Wrapper>
-        <Consumer />
+        <AnnounceConsumer holderRef={holderRef} />
       </Wrapper>,
     );
 
@@ -104,12 +117,12 @@ describe('T023a-TEST-2 — announce() updates the region text content', () => {
     expect(region.textContent ?? '').toBe('');
 
     act(() => {
-      announce('Hello');
+      holderRef.current('Hello');
     });
     expect(region.textContent).toBe('Hello');
 
     act(() => {
-      announce('World');
+      holderRef.current('World');
     });
     // Most-recent-wins: second announcement replaces the first.
     expect(region.textContent).toBe('World');
@@ -193,38 +206,30 @@ describe('T023a-TEST-3 — each state change fires the exact expected announceme
 
   // ------ Round-trip: announce() → region text matches catalogue entry ---
   it('announcing ANNOUNCEMENTS.capturingStarted lands verbatim in the region', () => {
-    let announce: (msg: string) => void = () => undefined;
-    function Consumer() {
-      announce = useAnnounce();
-      return null;
-    }
+    const holderRef: AnnounceHolder = { current: () => undefined };
     render(
       <Wrapper>
-        <Consumer />
+        <AnnounceConsumer holderRef={holderRef} />
       </Wrapper>,
     );
 
     act(() => {
-      announce(ANNOUNCEMENTS.capturingStarted);
+      holderRef.current(ANNOUNCEMENTS.capturingStarted);
     });
     const region = screen.getByRole('status');
     expect(region.textContent).toBe('Capturing started.');
   });
 
   it('announcing ANNOUNCEMENTS.captureFailed("not_found") lands verbatim in the region', () => {
-    let announce: (msg: string) => void = () => undefined;
-    function Consumer() {
-      announce = useAnnounce();
-      return null;
-    }
+    const holderRef: AnnounceHolder = { current: () => undefined };
     render(
       <Wrapper>
-        <Consumer />
+        <AnnounceConsumer holderRef={holderRef} />
       </Wrapper>,
     );
 
     act(() => {
-      announce(ANNOUNCEMENTS.captureFailed('not_found'));
+      holderRef.current(ANNOUNCEMENTS.captureFailed('not_found'));
     });
     const region = screen.getByRole('status');
     expect(region.textContent).toBe(
