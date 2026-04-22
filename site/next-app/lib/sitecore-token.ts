@@ -117,7 +117,46 @@ async function fetchFreshToken(): Promise<string> {
     token: json.access_token,
     expiresAt: Date.now() + json.expires_in * 1000,
   };
+
+  // R-6 / NFR-O-01 / § 4c-6: on first successful auth, log the tenant
+  // identifier so operators can correlate requests without exposing the
+  // bearer token or client secret. A warm-cache call skips this function
+  // entirely, so this fires at most once per cold-cache fetch.
+  const tenant = decodeTenantIdFromJwt(json.access_token);
+  if (tenant) {
+    // Log ONLY the tenant id — never the bearer token or any secret.
+    console.log(`[pageshot] tenant=${tenant}`);
+  }
+
   return json.access_token;
+}
+
+/**
+ * Extract the `sub` (fallback: `tid`) claim from a JWT without verifying the
+ * signature. The token cache does not need to authenticate the JWT — it only
+ * needs the tenant identifier for structured logging. Returns `null` on any
+ * parse failure; callers must treat the return value as best-effort metadata.
+ */
+function decodeTenantIdFromJwt(jwt: string): string | null {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    const payloadSegment = parts[1]!;
+    // base64url → base64
+    const b64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const decoded = Buffer.from(padded, 'base64').toString('utf8');
+    const parsed: unknown = JSON.parse(decoded);
+    if (parsed && typeof parsed === 'object') {
+      const sub = (parsed as Record<string, unknown>).sub;
+      if (typeof sub === 'string' && sub.length > 0) return sub;
+      const tid = (parsed as Record<string, unknown>).tid;
+      if (typeof tid === 'string' && tid.length > 0) return tid;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
