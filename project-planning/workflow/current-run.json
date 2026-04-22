@@ -5,7 +5,7 @@
   "updated_at": "2026-04-22T07:30:37Z",
   "product_slug": "pageshot",
   "product_root": "products/pageshot",
-  "status": "spec_ready",
+  "status": "architecture_ready",
   "prd_input_mode": "prompt_only",
   "platform_target": "marketplace",
   "task_breakdown_style": "standard",
@@ -54,6 +54,14 @@
       "exited_at": "2026-04-22T07:30:37Z",
       "outcome": "completed",
       "error": null
+    },
+    {
+      "stage": "architecture_ready",
+      "agent": "04-software-architect",
+      "entered_at": "2026-04-22T07:30:37Z",
+      "exited_at": "2026-04-22T07:30:37Z",
+      "outcome": "completed",
+      "error": null
     }
   ],
   "implementation": {
@@ -70,6 +78,8 @@
     "Tenant selection for custom-app registration deferred to scaffold time (stakeholder has credentials ready).",
     "discovery: completed",
     "critical_review: completed",
-    "prd_input_mode: prompt_only"
+    "prd_input_mode: prompt_only",
+    "planning_track: minimal (architecture blueprint file omitted; ADRs capture decisions from PRD)",
+    "architecture decisions recorded: ADR-0002 (iframe+proxy), ADR-0003 (no local HTTPS), ADR-0004 (Next.js+Node), ADR-0005 (custom app), ADR-0006 (stateless)"
   ]
 }
