@@ -478,6 +478,59 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* ────────────────────────────────────────────────────────────────────
+       PageShot — Shutterbug design tokens (T004)
+       See task-breakdown-20260422T073037Z.md § 4c-3 / § 4c-4.
+       Tailwind's default amber/stone/rose palettes are used unchanged, so
+       no --color-* additions are needed here — only shadows + animation.
+       ──────────────────────────────────────────────────────────────────── */
+
+    --shadow-shutter: 0 10px 30px -8px rgb(245 158 11 / 0.35);
+    --shadow-shutter-hover: 0 14px 36px -8px rgb(245 158 11 / 0.55);
+    --shadow-polaroid: 0 20px 40px -12px rgb(120 53 15 / 0.22), 0 2px 6px -2px rgb(120 53 15 / 0.08);
+
+    --animate-shutter-bloom: bloom 200ms ease-out;
+    --animate-shutter-press: shutter-press 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    --animate-shake: shake 80ms ease-in-out;
+}
+
+/* Keyframes for the shutter / polaroid / error shake animations.
+   Tailwind v4 resolves --animate-<name> utilities against any @keyframes
+   defined at module scope; they do not need to be nested inside @theme. */
+@keyframes shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(-4px);
+    }
+}
+
+@keyframes bloom {
+    0%,
+    100% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.9;
+    }
+}
+
+@keyframes shutter-press {
+    0% {
+        transform: scale(1);
+    }
+    30% {
+        transform: scale(0.92);
+    }
+    65% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 :root {
