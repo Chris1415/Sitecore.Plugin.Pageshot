@@ -157,12 +157,23 @@ export function PolaroidCard(props: PolaroidCardProps) {
     const altText = `Screenshot of page ${pageName} on ${siteName}, captured ${capturedAt.toLocaleString()}`;
     return (
       <div data-testid="polaroid-root" className={rootClassName}>
-        <div className="aspect-[4/3] overflow-hidden rounded-2xl bg-stone-100">
+        {/*
+         * Image slot: the Agent API returns full-page screenshots (tall!),
+         * so the slot no longer forces a fixed 4:3 aspect. Instead:
+         *   - `max-h-[420px]` caps the thumbnail height so stacking two
+         *     captures doesn't run off-screen.
+         *   - `overflow-y-auto` makes the full image scrollable in place
+         *     when it exceeds the cap — the editor still sees the whole
+         *     page without the panel growing indefinitely.
+         *   - The actual Copy + Download actions ship the full-resolution
+         *     image regardless of preview framing.
+         */}
+        <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl bg-stone-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`data:image/png;base64,${imageBase64}`}
             alt={altText}
-            className="h-full w-full object-cover object-top"
+            className="block h-auto w-full"
           />
         </div>
         <div
