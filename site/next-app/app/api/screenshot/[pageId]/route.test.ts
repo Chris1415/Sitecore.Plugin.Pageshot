@@ -168,12 +168,19 @@ describe('T011a-TEST-1 — happy path returns { ok: true, image }', () => {
     const res = await GET(mkRequest('page-1'), mkPageContext('page-1'));
     const { body, status, raw } = await readEnvelope(res);
     expect(status).toBe(200);
-    expect(body).toEqual({ ok: true, image: agentOk.image });
+    expect(body).toEqual({ ok: true, image: agentOk.screenshot_base64 });
 
     // Exactly one upstream Agent API call.
     const agentCalls = fetchMock.calls.filter((c) => c.url.includes('/ai-agent-api'));
     expect(agentCalls).toHaveLength(1);
-    expect(agentCalls[0]!.url).toBe(`${AGENT_BASE}/page-1/screenshot`);
+    // URL carries the required `version` + viewport-derived width/height.
+    // The base path is matched via startsWith so future query-param additions
+    // (language, etc.) do not flake this assertion.
+    expect(agentCalls[0]!.url.startsWith(`${AGENT_BASE}/page-1/screenshot?`)).toBe(true);
+    const parsedUrl = new URL(agentCalls[0]!.url);
+    expect(parsedUrl.searchParams.get('version')).toBe('1');
+    expect(parsedUrl.searchParams.get('width')).toBe('1200');
+    expect(parsedUrl.searchParams.get('height')).toBe('800');
 
     // Authorization header + Accept header per § 4c-6.
     const agentHeaders = new Headers(agentCalls[0]!.init?.headers);
@@ -215,7 +222,7 @@ describe('T011a-TEST-2 — 401 refresh+retry-once succeeds', () => {
     const res = await GET(mkRequest('p7'), mkPageContext('p7'));
     const { body, status, raw } = await readEnvelope(res);
     expect(status).toBe(200);
-    expect(body).toEqual({ ok: true, image: agentOk.image });
+    expect(body).toEqual({ ok: true, image: agentOk.screenshot_base64 });
 
     const agentCalls = fetchMock.calls.filter((c) => c.url.includes('/ai-agent-api'));
     // Exactly two upstream calls — one retry, not zero, not two.

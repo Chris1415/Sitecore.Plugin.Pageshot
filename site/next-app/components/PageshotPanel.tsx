@@ -1,56 +1,22 @@
 'use client';
 
 /**
- * T019 + T024b — `<PageshotPanel>` top-level Shutterbug composition.
+ * T019 + T024b + T029 — `<PageshotPanel>` top-level Shutterbug composition.
  *
- * T019 delivered the layout + state-machine + server-fetch + hook wiring.
- * T024b adds the keyboard + focus map (§ 4c-4 "Keyboard & focus map"):
+ * T029 extension: the panel now supports multi-viewport capture. The editor
+ * can enable Mobile, Desktop, or both via the <ViewportToggle>. On Capture:
+ * PageShot fires one fetch per selected viewport (in parallel), and on
+ * `ready` renders one polaroid per capture, stacked vertically, each with
+ * its own Copy + Download pills. A single viewport produces a single polaroid
+ * (the v1 UX unchanged).
  *
- *   - On panel mount with valid pages.context → shutter.focus() once.
- *   - On capturing → ready  → copyButton.focus({ preventScroll: true }).
- *   - On capturing → error  → retryButton.focus({ preventScroll: true }).
- *   - On Escape anywhere inside the panel (keydown) → shutter.focus().
- *   - Enter / Space activate the focused button via native <button> handling.
- *   - Tab order = DOM order (ensured by the layout — Shutter → Copy →
- *     Download in ready; Shutter → Retry in error).
+ * If any viewport fails → panel goes to `error` with the first failure's
+ * envelope; partial successes are dropped. Retry re-runs the whole set.
  *
- * Layout source of truth: POC v2 (`products/pageshot/pocs/poc-v2/index.html`).
- * Copy source of truth:   § 4c-4 of the task breakdown.
- * State machine:          `usePanelState` (T013b).
- * Auxiliary hooks:        `useElapsedTime` (T016b), `useCopyImage` (T020b),
- *                         `useDownloadImage` (T021b).
- * Server route:           `app/api/screenshot/[pageId]/route.ts` (T011b).
- * Announcer:              `<LiveRegion>` + `useAnnounce` (T023b).
- *
- * Responsibilities delivered here (§ 4 T019 + T025):
- *   1. Read `usePagesContext()` → `{ pageId, siteName, pageName }`. When
- *      `pageId` is missing, render a small "waiting for page context" line.
- *      The Shutterbug UI only makes sense once a page is loaded.
- *   2. Compose header → status line → hero (Shutter + label) → empty preview
- *      OR Polaroid → action bar → inline message → sr-only LiveRegion.
- *      Top-to-bottom order matches POC v2; Tab order = DOM order per § 4c-4.
- *   3. Drive the state machine:
- *        Shutter click → dispatch({ type: 'capture', startedAt: Date.now() })
- *                     → fetch(`/api/screenshot/${pageId}`)
- *                     → on `{ ok: true }`  dispatch({ type: 'resolved', ... })
- *                     → on `{ ok: false }` dispatch({ type: 'failed', ... })
- *      AC-5.4 short-circuit: if `navigator.onLine === false`, dispatch
- *      `failed` with `{ code: 'network' }` without issuing fetch.
- *   4. Announcement catalogue (§ 4c-4 "Announcement catalogue"):
- *        - mount with valid pageId → `readyToCapture`
- *        - idle → capturing        → `capturingStarted`
- *        - capturing past 5 s      → `stillCapturing(n)` once per second
- *        - capturing → ready       → `screenshotReady`
- *        - capturing → error       → `captureFailed(code)`
- *        - copy success            → `copiedToClipboard`
- *        - download click          → `downloadStarted`
- *
- * § 4c-1 boundary: every browser-API call (fetch, clipboard, download anchor)
- * is guarded so SSR renders do not crash; secrets stay server-side — this
- * component never reads `SITECORE_DEPLOY_*`.
+ * Source of truth for layout: POC v2 + § 4c-4. State machine: `use-panel-state`.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   ANNOUNCEMENTS,
@@ -66,8 +32,17 @@ import { ShutterLabel } from './ShutterLabel';
 import { useCopyImage } from './use-copy-image';
 import { useDownloadImage } from './use-download-image';
 import { useElapsedTime } from './use-elapsed';
-import { usePanelState, type PanelErrorCode } from './use-panel-state';
+import {
+  usePanelState,
+  type Capture,
+  type PanelErrorCode,
+} from './use-panel-state';
 import { usePagesContext } from './providers/marketplace';
+import {
+  ViewportToggle,
+  VIEWPORT_LABELS,
+  type Viewport,
+} from './ViewportToggle';
 
 // -----------------------------------------------------------------------------
 // Status-line copy (§ 4c-4 "Status line copy")
@@ -94,19 +69,12 @@ const STATUS_COPY = {
 
 const EMPTY_PREVIEW_COPY = 'Tap Capture to catch this page.';
 
-// Server-route envelope shape (matches § 4c-6 exactly).
 type ScreenshotEnvelope =
   | { ok: true; image: string }
   | {
       ok: false;
       error: { code: PanelErrorCode; message: string };
     };
-
-// -----------------------------------------------------------------------------
-// Public prop types — the panel only really needs pages.context, but we allow
-// parents to inject a fetch override for tests that prefer not to touch
-// globalThis.fetch.
-// -----------------------------------------------------------------------------
 
 export interface PageshotPanelProps {
   fetchImpl?: typeof fetch;
@@ -121,28 +89,22 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
   const [state, dispatch] = usePanelState();
   const announce = useAnnounce();
 
-  // ---- Refs for keyboard + focus map (T024b) ------------------------------
-  // `shutterRef` / `copyRef` / `downloadRef` / `retryRef` point to the native
-  // <button> elements rendered by the wrapper components. The wrappers
-  // (ShutterWithRef / ActionPillWithRef, defined below) capture the inner
-  // button via querySelector in a post-commit effect.
+  const [viewports, setViewports] = useState<Viewport[]>(['desktop']);
+
+  // Focus refs. `firstCopyRef` receives the Copy pill from the FIRST capture
+  // block after ready — mount it below via a callback so the CaptureBlock
+  // stays ignorant of panel-level focus concerns.
   const shutterRef = useRef<HTMLButtonElement | null>(null);
-  const copyRef = useRef<HTMLButtonElement | null>(null);
-  const downloadRef = useRef<HTMLButtonElement | null>(null);
+  const firstCopyRef = useRef<HTMLButtonElement | null>(null);
   const retryRef = useRef<HTMLButtonElement | null>(null);
-  // Panel root — hosts the Escape keydown handler so any focused inner
-  // element returns focus to the Shutter without per-element wiring.
   const panelRef = useRef<HTMLElement | null>(null);
 
-  // Track whether the mount announcement has already fired. The panel may
-  // re-render many times before pages.context lands; `readyToCapture` should
-  // fire exactly once when a valid pageId first appears.
   const mountAnnouncedRef = useRef<boolean>(false);
   const mountFocusedRef = useRef<boolean>(false);
 
   const hasValidContext = !!pages?.pageId;
 
-  // ---- Mount announcement + auto-focus Shutter (T024b-TEST-1) -------------
+  // ---- Mount announcement + auto-focus Shutter ---------------------------
   useEffect(() => {
     if (!hasValidContext) return;
     if (!mountAnnouncedRef.current) {
@@ -151,8 +113,6 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     }
     if (!mountFocusedRef.current) {
       mountFocusedRef.current = true;
-      // Defer to a microtask so the Shutter's inner <button> ref is attached
-      // by the ref-capturing wrapper before we call focus().
       const id = setTimeout(() => {
         shutterRef.current?.focus();
       }, 0);
@@ -161,7 +121,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     return undefined;
   }, [announce, hasValidContext]);
 
-  // ---- Elapsed counter (T016b + catalogue "stillCapturing(n)") ------------
+  // ---- Elapsed counter ---------------------------------------------------
   const capturingStartedAt =
     state.kind === 'capturing' ? state.startedAt : null;
   const elapsedSeconds = useElapsedTime(capturingStartedAt);
@@ -178,8 +138,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     }
   }, [announce, elapsedSeconds]);
 
-  // ---- Post-transition announcements + focus moves (catalogue 2/4/7 +
-  //      T024b-TEST-2/3) -------------------------------------------------
+  // ---- Post-transition announcements + focus moves -----------------------
   const prevKindRef = useRef<typeof state.kind | null>(null);
   useEffect(() => {
     const prev = prevKindRef.current;
@@ -188,11 +147,8 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
     if (state.kind === 'ready') {
       announce(ANNOUNCEMENTS.screenshotReady);
-      // Focus Copy — the first actionable pill in ready state. Defer to a
-      // microtask so React has committed the action-bar buttons and their
-      // refs have been captured by ActionPillWithRef.
       const id = setTimeout(() => {
-        copyRef.current?.focus({ preventScroll: true });
+        firstCopyRef.current?.focus({ preventScroll: true });
       }, 0);
       return () => clearTimeout(id);
     }
@@ -209,10 +165,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     return undefined;
   }, [announce, state]);
 
-  // ---- Panel-level Escape handler (T024b-TEST-4) --------------------------
-  // Any keydown bubbling up from inside <PageshotPanel> with key==='Escape'
-  // refocuses the Shutter. This is panel-root wiring so no per-element
-  // handlers are needed.
+  // ---- Escape handler ----------------------------------------------------
   useEffect(() => {
     const node = panelRef.current;
     if (!node) return;
@@ -226,14 +179,14 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     return () => node.removeEventListener('keydown', handler);
   }, [hasValidContext]);
 
-  // ---- Capture flow -------------------------------------------------------
+  // ---- Capture flow ------------------------------------------------------
   const issueCapture = useCallback(async () => {
     if (!pages?.pageId) return;
     const pageId = pages.pageId;
     const siteName = pages.siteName ?? '';
     const pageName = pages.pageName ?? '';
+    const selected = viewports.length > 0 ? viewports : (['desktop'] as const);
 
-    // AC-5.4 client-side offline short-circuit.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       dispatch({ type: 'capture', startedAt: Date.now() });
       dispatch({
@@ -246,40 +199,42 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
     dispatch({ type: 'capture', startedAt: Date.now() });
 
+    const doFetch = fetchImpl ?? globalThis.fetch;
+
     try {
-      const doFetch = fetchImpl ?? globalThis.fetch;
-      const response = await doFetch(
-        `/api/screenshot/${encodeURIComponent(pageId)}`,
+      const results = await Promise.all(
+        selected.map(async (viewport) => {
+          const response = await doFetch(
+            `/api/screenshot/${encodeURIComponent(pageId)}?viewport=${viewport}`,
+          );
+          const body = (await response.json()) as ScreenshotEnvelope;
+          return { viewport, body };
+        }),
       );
-      let body: ScreenshotEnvelope;
-      try {
-        body = (await response.json()) as ScreenshotEnvelope;
-      } catch {
+
+      const firstFailure = results.find((r) => r.body.ok === false);
+      if (firstFailure && firstFailure.body.ok === false) {
         dispatch({
           type: 'failed',
-          code: 'unknown',
-          message: 'Try again in a moment.',
+          code: firstFailure.body.error.code,
+          message: firstFailure.body.error.message,
         });
         return;
       }
 
-      if (body.ok === true) {
-        dispatch({
-          type: 'resolved',
-          image: body.image,
+      const capturedAt = new Date();
+      const captures: Capture[] = results.map((r) => {
+        if (r.body.ok !== true) throw new Error('unreachable');
+        return {
+          viewport: r.viewport,
+          imageBase64: r.body.image,
           siteName,
           pageName,
-          capturedAt: new Date(),
-        });
-        return;
-      }
-
-      const err = body.error;
-      dispatch({
-        type: 'failed',
-        code: err.code,
-        message: err.message,
+          capturedAt,
+        };
       });
+
+      dispatch({ type: 'resolved', captures });
     } catch {
       dispatch({
         type: 'failed',
@@ -287,48 +242,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         message: 'Check your connection, then try again.',
       });
     }
-  }, [dispatch, fetchImpl, pages]);
-
-  // ---- Copy action (T020b + catalogue "copiedToClipboard") ----------------
-  const readyImage = state.kind === 'ready' ? state.imageBase64 : '';
-  const {
-    available: clipboardAvailable,
-    status: copyStatus,
-    deniedMessage,
-    copy: copyImage,
-  } = useCopyImage(readyImage);
-
-  const prevCopyStatusRef = useRef<typeof copyStatus>(copyStatus);
-  useEffect(() => {
-    const prev = prevCopyStatusRef.current;
-    prevCopyStatusRef.current = copyStatus;
-    if (prev !== 'copied' && copyStatus === 'copied') {
-      announce(ANNOUNCEMENTS.copiedToClipboard);
-    }
-  }, [announce, copyStatus]);
-
-  // ---- Download action (T021b + catalogue "downloadStarted") --------------
-  const downloadCapturedAt =
-    state.kind === 'ready' ? state.capturedAt : new Date(0);
-  const downloadSite = state.kind === 'ready' ? state.siteName : '';
-  const downloadPage = state.kind === 'ready' ? state.pageName : '';
-  const { download: downloadImage } = useDownloadImage({
-    imageBase64: readyImage,
-    siteName: downloadSite,
-    pageName: downloadPage,
-    capturedAt: downloadCapturedAt,
-  });
-
-  const handleDownloadPress = useCallback(async () => {
-    if (state.kind !== 'ready') return;
-    announce(ANNOUNCEMENTS.downloadStarted);
-    await downloadImage();
-  }, [announce, downloadImage, state.kind]);
-
-  const handleCopyPress = useCallback(() => {
-    if (state.kind !== 'ready') return;
-    void copyImage();
-  }, [copyImage, state.kind]);
+  }, [dispatch, fetchImpl, pages, viewports]);
 
   const handleRetryPress = useCallback(() => {
     void issueCapture();
@@ -338,7 +252,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     void issueCapture();
   }, [issueCapture]);
 
-  // ---- Derived view props -------------------------------------------------
+  // ---- Derived view props ------------------------------------------------
   const statusKey: keyof typeof STATUS_COPY =
     state.kind === 'capturing'
       ? 'capturing'
@@ -355,17 +269,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     return 'idle';
   })();
 
-  const copyPillState = (() => {
-    if (state.kind !== 'ready') return 'disabled';
-    if (copyStatus === 'copied') return 'success';
-    if (copyStatus === 'denied') return 'denied';
-    if (!clipboardAvailable) return 'disabled';
-    return 'idle';
-  })();
-
-  const downloadPillState = state.kind === 'ready' ? 'idle' : 'disabled';
-
-  // ---- Loading state when pages.context hasn't arrived yet ----------------
+  // ---- Loading state -----------------------------------------------------
   if (!hasValidContext) {
     return (
       <main
@@ -378,9 +282,6 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       </main>
     );
   }
-
-  const clipboardDenied =
-    copyStatus === 'denied' || copyStatus === 'unsupported';
 
   return (
     <main
@@ -418,6 +319,12 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         </p>
       </section>
 
+      <ViewportToggle
+        value={viewports}
+        onChange={setViewports}
+        disabled={state.kind === 'capturing'}
+      />
+
       <section
         data-testid="hero"
         className="flex flex-col items-center gap-2 py-2"
@@ -444,51 +351,30 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       ) : null}
 
       {state.kind === 'ready' ? (
-        <PolaroidCard
-          kind="ready"
-          imageBase64={state.imageBase64}
-          siteName={state.siteName}
-          pageName={state.pageName}
-          capturedAt={state.capturedAt}
-        />
+        <div data-testid="captures-stack" className="flex flex-col gap-5">
+          {state.captures.map((capture, index) => (
+            <CaptureBlock
+              key={capture.viewport}
+              capture={capture}
+              copyRef={index === 0 ? firstCopyRef : undefined}
+            />
+          ))}
+        </div>
       ) : null}
 
       {state.kind === 'error' ? (
-        <PolaroidCard kind="error" code={state.code} />
+        <>
+          <PolaroidCard kind="error" code={state.code} />
+          <div data-testid="action-bar" className="flex flex-row gap-2">
+            <ActionPillWithButtonRef
+              buttonRef={retryRef}
+              variant="retry"
+              state="idle"
+              onPress={handleRetryPress}
+            />
+          </div>
+        </>
       ) : null}
-
-      <div
-        data-testid="action-bar"
-        className="flex flex-row gap-2 @xs/panel:flex-col"
-      >
-        {state.kind === 'error' ? (
-          <ActionPillWithButtonRef
-            buttonRef={retryRef}
-            variant="retry"
-            state="idle"
-            onPress={handleRetryPress}
-          />
-        ) : (
-          <>
-            <ActionPillWithButtonRef
-              buttonRef={copyRef}
-              variant="copy"
-              state={copyPillState}
-              onPress={handleCopyPress}
-            />
-            <ActionPillWithButtonRef
-              buttonRef={downloadRef}
-              variant="download"
-              state={downloadPillState}
-              onPress={handleDownloadPress}
-            />
-          </>
-        )}
-      </div>
-
-      <InlineMessage visible={clipboardDenied} tone="warn">
-        {deniedMessage}
-      </InlineMessage>
 
       <LiveRegion />
     </main>
@@ -496,15 +382,100 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-capture block — one polaroid + Copy + Download, scoped to a single
+// viewport's image. Each block owns its own useCopyImage / useDownloadImage
+// hook instance so the two viewports don't share clipboard / download state.
+// ---------------------------------------------------------------------------
+
+interface CaptureBlockProps {
+  capture: Capture;
+  copyRef?: React.MutableRefObject<HTMLButtonElement | null>;
+}
+
+function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
+  const announce = useAnnounce();
+  const {
+    available: clipboardAvailable,
+    status: copyStatus,
+    deniedMessage,
+    copy: copyImage,
+  } = useCopyImage(capture.imageBase64);
+
+  const { download: downloadImage } = useDownloadImage({
+    imageBase64: capture.imageBase64,
+    siteName: capture.siteName,
+    pageName: capture.pageName,
+    capturedAt: capture.capturedAt,
+  });
+
+  const prevCopyStatusRef = useRef<typeof copyStatus>(copyStatus);
+  useEffect(() => {
+    const prev = prevCopyStatusRef.current;
+    prevCopyStatusRef.current = copyStatus;
+    if (prev !== 'copied' && copyStatus === 'copied') {
+      announce(ANNOUNCEMENTS.copiedToClipboard);
+    }
+  }, [announce, copyStatus]);
+
+  const handleCopyPress = useCallback(() => {
+    void copyImage();
+  }, [copyImage]);
+
+  const handleDownloadPress = useCallback(async () => {
+    announce(ANNOUNCEMENTS.downloadStarted);
+    await downloadImage();
+  }, [announce, downloadImage]);
+
+  const copyPillState = (() => {
+    if (copyStatus === 'copied') return 'success';
+    if (copyStatus === 'denied') return 'denied';
+    if (!clipboardAvailable) return 'disabled';
+    return 'idle';
+  })();
+
+  const clipboardDenied =
+    copyStatus === 'denied' || copyStatus === 'unsupported';
+
+  return (
+    <div
+      data-testid={`capture-block-${capture.viewport}`}
+      className="flex flex-col gap-3"
+    >
+      <div className="flex items-center justify-between px-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">
+        <span>{VIEWPORT_LABELS[capture.viewport]}</span>
+      </div>
+      <PolaroidCard
+        kind="ready"
+        imageBase64={capture.imageBase64}
+        siteName={capture.siteName}
+        pageName={capture.pageName}
+        capturedAt={capture.capturedAt}
+      />
+      <div
+        data-testid={`action-bar-${capture.viewport}`}
+        className="flex flex-row gap-2"
+      >
+        <ActionPillWithButtonRef
+          buttonRef={copyRef}
+          variant="copy"
+          state={copyPillState}
+          onPress={handleCopyPress}
+        />
+        <ActionPillWithButtonRef
+          variant="download"
+          state="idle"
+          onPress={handleDownloadPress}
+        />
+      </div>
+      <InlineMessage visible={clipboardDenied} tone="warn">
+        {deniedMessage}
+      </InlineMessage>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Ref-capturing wrappers (T024b).
-//
-// The existing `<Shutter>` + `<ActionPill>` components do not accept a ref
-// prop — extending their public signatures would ripple through five tests
-// and tightly couple focus management to the leaf components. Instead, we
-// wrap each with a thin component that renders the leaf inside a <div>,
-// locates the leaf's inner <button> in a post-commit effect, and writes it
-// into the parent's ref. The panel's focus-transition effects read from
-// these refs.
 // ---------------------------------------------------------------------------
 
 interface ShutterWithButtonRefProps {
@@ -520,8 +491,6 @@ function ShutterWithButtonRef(props: ShutterWithButtonRefProps) {
 
   useEffect(() => {
     buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
-    // Run on every render so state transitions that swap the inner DOM
-    // (e.g. capturing → ready flips the icon) keep the button ref current.
   });
 
   return (
@@ -536,7 +505,7 @@ function ShutterWithButtonRef(props: ShutterWithButtonRefProps) {
 }
 
 interface ActionPillWithButtonRefProps {
-  buttonRef: React.MutableRefObject<HTMLButtonElement | null>;
+  buttonRef?: React.MutableRefObject<HTMLButtonElement | null>;
   variant: 'copy' | 'download' | 'retry';
   state: 'idle' | 'success' | 'disabled' | 'denied';
   onPress: () => void;
@@ -547,6 +516,7 @@ function ActionPillWithButtonRef(props: ActionPillWithButtonRefProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!buttonRef) return;
     buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
   });
 
@@ -563,8 +533,7 @@ function ActionPillWithButtonRef(props: ActionPillWithButtonRefProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Public export — wraps the body in the LiveRegionProvider so child calls to
-// `useAnnounce()` resolve to the same announcement bus.
+// Public export.
 // ---------------------------------------------------------------------------
 
 export function PageshotPanel(props: PageshotPanelProps = {}) {
@@ -575,5 +544,4 @@ export function PageshotPanel(props: PageshotPanelProps = {}) {
   );
 }
 
-// Named re-export so integration tests can mock the server contract shape.
 export type { ScreenshotEnvelope };

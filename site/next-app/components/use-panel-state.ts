@@ -1,35 +1,36 @@
 /**
- * T013b — PageShot panel state machine + `usePanelState()` hook.
+ * T013b + T029 — PageShot panel state machine + `usePanelState()` hook.
  *
- * Source of truth: `PanelState` discriminated union from § 4c-6 of the task
- * breakdown (copied from PRD § 10) and the transition bullets in § 4 T013b.
+ * POST-MVP (T029): the `ready` state now carries an array of captures — one
+ * per viewport the editor asked PageShot to render. Single-viewport case is
+ * a length-1 array; multi-viewport stacks polaroids below each other.
  *
  * States:
  *   - `idle`       — nothing to show; waiting for a capture press.
- *   - `capturing`  — upstream request in flight; `startedAt` is a `Date.now()`
- *                    timestamp used by the elapsed-time controller (T016b).
- *   - `ready`      — we have a base64 PNG + the page/site names + capturedAt.
+ *   - `capturing`  — upstream request(s) in flight; `startedAt` is a
+ *                    `Date.now()` timestamp for the elapsed-time controller.
+ *   - `ready`      — `captures: Array<Capture>`, one element per viewport.
+ *                    The panel renders each as its own polaroid + actions.
  *   - `error`      — the route handler returned `{ ok: false, error }`; we copy
- *                    `code` + `message` verbatim (§ 4 T013b bullet 3 — the copy
- *                    strings flow through to PolaroidCard's error variant).
+ *                    `code` + `message` verbatim. Any in-flight partial
+ *                    captures are dropped — Retry re-runs the whole set.
  *
- * Events (per § 4 T013b):
+ * Events:
  *   - `capture`  — user pressed Shutter. Valid from `idle`, `ready`, `error`.
- *                  From `ready` the previous image is dropped (FR-11).
- *                  From `error` this is the Retry path.
- *   - `resolved` — `/api/screenshot/[pageId]` returned `{ ok: true, image }`.
+ *   - `resolved` — all viewport fetches succeeded; carries `captures`.
  *                  Only valid from `capturing`.
- *   - `failed`   — `/api/screenshot/[pageId]` returned `{ ok: false, error }`.
- *                  Only valid from `capturing`.
+ *   - `failed`   — at least one fetch returned `{ ok: false }`; carries the
+ *                  first failure's code + message. Only valid from `capturing`.
  *
- * Invalid transitions are no-ops — the reducer returns the same state
- * reference so React's bail-out short-circuits re-renders and a stray event
- * (e.g. a stale `resolved` after the user retried) cannot corrupt state.
+ * Invalid transitions are no-ops — reducer returns the same state reference
+ * so React's bail-out short-circuits re-renders.
  */
 
 'use client';
 
 import { useReducer, type Dispatch } from 'react';
+
+import type { Viewport } from './ViewportToggle';
 
 /** Error codes mirror the server-route envelope in § 4c-6. */
 export type PanelErrorCode =
@@ -39,22 +40,21 @@ export type PanelErrorCode =
   | 'network'
   | 'unknown';
 
-/**
- * `PanelState` discriminated union — PRD § 10 / task-breakdown § 4c-6.
- *
- * `elapsedSeconds` inside `capturing` is owned by T016b — the reducer leaves
- * it undefined at transition-time; the elapsed-time controller merges its
- * tick into this shape without going through an event.
- */
+/** One capture result — one polaroid in the ready UI. */
+export interface Capture {
+  viewport: Viewport;
+  imageBase64: string;
+  siteName: string;
+  pageName: string;
+  capturedAt: Date;
+}
+
 export type PanelState =
   | { kind: 'idle' }
   | { kind: 'capturing'; startedAt: number; elapsedSeconds?: number }
   | {
       kind: 'ready';
-      imageBase64: string;
-      siteName: string;
-      pageName: string;
-      capturedAt: Date;
+      captures: Capture[];
     }
   | {
       kind: 'error';
@@ -62,36 +62,19 @@ export type PanelState =
       message: string;
     };
 
-/** Events the panel dispatches into the reducer. */
 export type PanelEvent =
   | { type: 'capture'; startedAt: number }
-  | {
-      type: 'resolved';
-      image: string;
-      siteName: string;
-      pageName: string;
-      capturedAt: Date;
-    }
+  | { type: 'resolved'; captures: Capture[] }
   | { type: 'failed'; code: PanelErrorCode; message: string };
 
-/** Canonical idle state — exported so tests and consumers agree on shape. */
 export const initialPanelState: PanelState = { kind: 'idle' };
 
-/**
- * Pure reducer. The four transitions are the only legal moves; any other
- * (state, event) pair returns the input state reference unchanged — React
- * will bail out and the UI will not re-render.
- */
 export function panelStateReducer(
   state: PanelState,
   event: PanelEvent,
 ): PanelState {
   switch (event.type) {
     case 'capture': {
-      // Valid from idle, ready, or error. Transition always yields a fresh
-      // capturing state with the event's `startedAt`. Any previous payload
-      // (ready.imageBase64, error.message) is discarded — this is FR-11 for
-      // the ready case and a clean slate for Retry from error.
       if (
         state.kind === 'idle' ||
         state.kind === 'ready' ||
@@ -99,28 +82,15 @@ export function panelStateReducer(
       ) {
         return { kind: 'capturing', startedAt: event.startedAt };
       }
-      // Already capturing — ignore duplicate press. (Shutter guards this with
-      // `disabled` anyway, but defence in depth.)
       return state;
     }
     case 'resolved': {
-      if (state.kind !== 'capturing') {
-        // Stale event (e.g. second network response arriving after user
-        // retried). No-op.
-        return state;
-      }
-      return {
-        kind: 'ready',
-        imageBase64: event.image,
-        siteName: event.siteName,
-        pageName: event.pageName,
-        capturedAt: event.capturedAt,
-      };
+      if (state.kind !== 'capturing') return state;
+      if (event.captures.length === 0) return state;
+      return { kind: 'ready', captures: event.captures };
     }
     case 'failed': {
-      if (state.kind !== 'capturing') {
-        return state;
-      }
+      if (state.kind !== 'capturing') return state;
       return {
         kind: 'error',
         code: event.code,
@@ -128,7 +98,6 @@ export function panelStateReducer(
       };
     }
     default: {
-      // Exhaustiveness check — if a new event type is added, TS flags this.
       const _exhaustive: never = event;
       void _exhaustive;
       return state;
@@ -136,11 +105,6 @@ export function panelStateReducer(
   }
 }
 
-/**
- * React hook wrapping `useReducer` with the panel reducer. Returns the
- * current state and a dispatch function — callers use the standard tuple
- * pattern.
- */
 export function usePanelState(): [PanelState, Dispatch<PanelEvent>] {
   return useReducer(panelStateReducer, initialPanelState);
 }

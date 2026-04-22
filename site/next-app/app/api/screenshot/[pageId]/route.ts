@@ -81,11 +81,48 @@ function errorEnvelope(
   );
 }
 
+/**
+ * Viewport presets — translate the client's `viewport=mobile|desktop` query
+ * param into the Agent API's `width` + `height` query params.
+ *
+ * Redeclared here rather than imported from `components/ViewportToggle.tsx`:
+ * that file carries `'use client'` and pulls React into its module graph;
+ * the Node-runtime route handler must not depend on it.
+ */
+const VIEWPORT_PRESETS = {
+  mobile: { width: 375, height: 812 },
+  desktop: { width: 1200, height: 800 },
+} as const;
+
+function resolveViewportDims(raw: string | null): {
+  width: number;
+  height: number;
+} {
+  if (raw === 'mobile') return VIEWPORT_PRESETS.mobile;
+  // desktop is the default — applies on missing, unknown, or explicit "desktop".
+  return VIEWPORT_PRESETS.desktop;
+}
+
 async function callAgentApi(
   pageId: string,
   token: string,
+  dims: { width: number; height: number },
 ): Promise<Response> {
-  const url = `${AGENT_BASE}/${encodeURIComponent(pageId)}/screenshot`;
+  // Agent API `/screenshot` query params (per OpenAPI bundle):
+  //   version:  required integer — content version to render (using 1 until
+  //             we surface a version selector; see dogfood friction log).
+  //   width:    rendered viewport width in pixels (default 1200).
+  //   height:   rendered viewport height in pixels (default 800).
+  //   language: locale code (default 'en') — not exposed in v1.
+  // Response shape: { type, fullPage, encoding, timestamp, screenshot_base64 }.
+  // Both of these (the response field name + `version` being required) are
+  // undocumented in the current agent-api.md skill — dogfood patch candidates.
+  const qs = new URLSearchParams({
+    version: '1',
+    width: String(dims.width),
+    height: String(dims.height),
+  });
+  const url = `${AGENT_BASE}/${encodeURIComponent(pageId)}/screenshot?${qs}`;
   return fetch(url, {
     method: 'GET',
     headers: {
@@ -96,19 +133,24 @@ async function callAgentApi(
 }
 
 interface AgentScreenshotOk {
-  image: string;
+  // Agent API actual response shape (discovered during T029 dogfood):
+  //   { type: "png", fullPage: true, encoding: "base64",
+  //     timestamp: "...", screenshot_base64: "..." }
+  // NOT documented in skills/sitecore/apis/sitecoreai/agent-api.md — pending patch.
+  screenshot_base64: string;
 }
 
 function isAgentScreenshotOk(value: unknown): value is AgentScreenshotOk {
   return (
     typeof value === 'object' &&
     value !== null &&
-    typeof (value as { image?: unknown }).image === 'string'
+    typeof (value as { screenshot_base64?: unknown }).screenshot_base64 ===
+      'string'
   );
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ pageId: string }> },
 ): Promise<Response> {
   const { pageId: rawPageId } = await ctx.params;
@@ -117,6 +159,11 @@ export async function GET(
     // Empty or whitespace-only pageId: no upstream call (T011a-TEST-8).
     return errorEnvelope('not_found', 400);
   }
+
+  // Parse viewport preset from the request query string. Unknown / missing
+  // → desktop default (1200x800).
+  const viewport = new URL(req.url).searchParams.get('viewport');
+  const dims = resolveViewportDims(viewport);
 
   // Obtain a token up front. A missing env raises SitecoreTokenConfigError
   // from the cache WITHOUT issuing any network request (FR-13 / T011a-TEST-7).
@@ -134,7 +181,7 @@ export async function GET(
   // First Agent API attempt.
   let upstream: Response;
   try {
-    upstream = await callAgentApi(pageId, token);
+    upstream = await callAgentApi(pageId, token, dims);
   } catch (err) {
     return mapFetchRejection(err);
   }
@@ -154,7 +201,7 @@ export async function GET(
     }
 
     try {
-      upstream = await callAgentApi(pageId, retryToken);
+      upstream = await callAgentApi(pageId, retryToken, dims);
     } catch (err) {
       return mapFetchRejection(err);
     }
@@ -179,7 +226,7 @@ async function mapUpstreamStatus(upstream: Response): Promise<Response> {
     if (!isAgentScreenshotOk(parsed)) {
       return errorEnvelope('upstream_unavailable', 500);
     }
-    return json({ ok: true, image: parsed.image }, 200);
+    return json({ ok: true, image: parsed.screenshot_base64 }, 200);
   }
 
   if (upstream.status === 404) {
