@@ -1,12 +1,18 @@
 'use client';
 
 /**
- * T019 — `<PageshotPanel>` top-level Shutterbug composition (layout + wiring).
+ * T019 + T024b — `<PageshotPanel>` top-level Shutterbug composition.
  *
- * This commit delivers the layout + state-machine + server-fetch + hook wiring
- * ONLY. The keyboard + focus map (auto-focus Shutter on mount, move focus on
- * ready/error transitions, Escape-returns-to-Shutter) is owned by T024b and
- * is deliberately absent from this file until T024a RED lands.
+ * T019 delivered the layout + state-machine + server-fetch + hook wiring.
+ * T024b adds the keyboard + focus map (§ 4c-4 "Keyboard & focus map"):
+ *
+ *   - On panel mount with valid pages.context → shutter.focus() once.
+ *   - On capturing → ready  → copyButton.focus({ preventScroll: true }).
+ *   - On capturing → error  → retryButton.focus({ preventScroll: true }).
+ *   - On Escape anywhere inside the panel (keydown) → shutter.focus().
+ *   - Enter / Space activate the focused button via native <button> handling.
+ *   - Tab order = DOM order (ensured by the layout — Shutter → Copy →
+ *     Download in ready; Shutter → Retry in error).
  *
  * Layout source of truth: POC v2 (`products/pageshot/pocs/poc-v2/index.html`).
  * Copy source of truth:   § 4c-4 of the task breakdown.
@@ -115,20 +121,44 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
   const [state, dispatch] = usePanelState();
   const announce = useAnnounce();
 
+  // ---- Refs for keyboard + focus map (T024b) ------------------------------
+  // `shutterRef` / `copyRef` / `downloadRef` / `retryRef` point to the native
+  // <button> elements rendered by the wrapper components. The wrappers
+  // (ShutterWithRef / ActionPillWithRef, defined below) capture the inner
+  // button via querySelector in a post-commit effect.
+  const shutterRef = useRef<HTMLButtonElement | null>(null);
+  const copyRef = useRef<HTMLButtonElement | null>(null);
+  const downloadRef = useRef<HTMLButtonElement | null>(null);
+  const retryRef = useRef<HTMLButtonElement | null>(null);
+  // Panel root — hosts the Escape keydown handler so any focused inner
+  // element returns focus to the Shutter without per-element wiring.
+  const panelRef = useRef<HTMLElement | null>(null);
+
   // Track whether the mount announcement has already fired. The panel may
   // re-render many times before pages.context lands; `readyToCapture` should
   // fire exactly once when a valid pageId first appears.
   const mountAnnouncedRef = useRef<boolean>(false);
+  const mountFocusedRef = useRef<boolean>(false);
 
   const hasValidContext = !!pages?.pageId;
 
-  // ---- Mount announcement -------------------------------------------------
+  // ---- Mount announcement + auto-focus Shutter (T024b-TEST-1) -------------
   useEffect(() => {
     if (!hasValidContext) return;
     if (!mountAnnouncedRef.current) {
       mountAnnouncedRef.current = true;
       announce(ANNOUNCEMENTS.readyToCapture);
     }
+    if (!mountFocusedRef.current) {
+      mountFocusedRef.current = true;
+      // Defer to a microtask so the Shutter's inner <button> ref is attached
+      // by the ref-capturing wrapper before we call focus().
+      const id = setTimeout(() => {
+        shutterRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(id);
+    }
+    return undefined;
   }, [announce, hasValidContext]);
 
   // ---- Elapsed counter (T016b + catalogue "stillCapturing(n)") ------------
@@ -148,7 +178,8 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
     }
   }, [announce, elapsedSeconds]);
 
-  // ---- Post-transition announcements (catalogue 2, 4, 7) ------------------
+  // ---- Post-transition announcements + focus moves (catalogue 2/4/7 +
+  //      T024b-TEST-2/3) -------------------------------------------------
   const prevKindRef = useRef<typeof state.kind | null>(null);
   useEffect(() => {
     const prev = prevKindRef.current;
@@ -157,16 +188,43 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
     if (state.kind === 'ready') {
       announce(ANNOUNCEMENTS.screenshotReady);
-      return;
+      // Focus Copy — the first actionable pill in ready state. Defer to a
+      // microtask so React has committed the action-bar buttons and their
+      // refs have been captured by ActionPillWithRef.
+      const id = setTimeout(() => {
+        copyRef.current?.focus({ preventScroll: true });
+      }, 0);
+      return () => clearTimeout(id);
     }
     if (state.kind === 'error') {
       announce(ANNOUNCEMENTS.captureFailed(state.code));
-      return;
+      const id = setTimeout(() => {
+        retryRef.current?.focus({ preventScroll: true });
+      }, 0);
+      return () => clearTimeout(id);
     }
     if (state.kind === 'capturing') {
       announce(ANNOUNCEMENTS.capturingStarted);
     }
+    return undefined;
   }, [announce, state]);
+
+  // ---- Panel-level Escape handler (T024b-TEST-4) --------------------------
+  // Any keydown bubbling up from inside <PageshotPanel> with key==='Escape'
+  // refocuses the Shutter. This is panel-root wiring so no per-element
+  // handlers are needed.
+  useEffect(() => {
+    const node = panelRef.current;
+    if (!node) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        shutterRef.current?.focus();
+      }
+    };
+    node.addEventListener('keydown', handler);
+    return () => node.removeEventListener('keydown', handler);
+  }, [hasValidContext]);
 
   // ---- Capture flow -------------------------------------------------------
   const issueCapture = useCallback(async () => {
@@ -310,7 +368,12 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
   // ---- Loading state when pages.context hasn't arrived yet ----------------
   if (!hasValidContext) {
     return (
-      <main className="p-6">
+      <main
+        ref={(el) => {
+          panelRef.current = el;
+        }}
+        className="p-6"
+      >
         <p className="text-sm text-stone-600">Loading page context&hellip;</p>
       </main>
     );
@@ -321,6 +384,9 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
   return (
     <main
+      ref={(el) => {
+        panelRef.current = el;
+      }}
       aria-label="PageShot capture panel"
       className="flex min-h-full flex-col gap-5 bg-amber-50 p-5 font-sans text-stone-900 @container/panel"
     >
@@ -356,7 +422,8 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         data-testid="hero"
         className="flex flex-col items-center gap-2 py-2"
       >
-        <Shutter
+        <ShutterWithButtonRef
+          buttonRef={shutterRef}
           state={shutterState}
           elapsedSeconds={elapsedSeconds ?? undefined}
           onPress={handleShutterPress}
@@ -395,19 +462,22 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         className="flex flex-row gap-2 @xs/panel:flex-col"
       >
         {state.kind === 'error' ? (
-          <ActionPill
+          <ActionPillWithButtonRef
+            buttonRef={retryRef}
             variant="retry"
             state="idle"
             onPress={handleRetryPress}
           />
         ) : (
           <>
-            <ActionPill
+            <ActionPillWithButtonRef
+              buttonRef={copyRef}
               variant="copy"
               state={copyPillState}
               onPress={handleCopyPress}
             />
-            <ActionPill
+            <ActionPillWithButtonRef
+              buttonRef={downloadRef}
               variant="download"
               state={downloadPillState}
               onPress={handleDownloadPress}
@@ -422,6 +492,73 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
       <LiveRegion />
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ref-capturing wrappers (T024b).
+//
+// The existing `<Shutter>` + `<ActionPill>` components do not accept a ref
+// prop — extending their public signatures would ripple through five tests
+// and tightly couple focus management to the leaf components. Instead, we
+// wrap each with a thin component that renders the leaf inside a <div>,
+// locates the leaf's inner <button> in a post-commit effect, and writes it
+// into the parent's ref. The panel's focus-transition effects read from
+// these refs.
+// ---------------------------------------------------------------------------
+
+interface ShutterWithButtonRefProps {
+  buttonRef: React.MutableRefObject<HTMLButtonElement | null>;
+  state: ShutterState;
+  elapsedSeconds?: number;
+  onPress: () => void;
+}
+
+function ShutterWithButtonRef(props: ShutterWithButtonRefProps) {
+  const { buttonRef, state, elapsedSeconds, onPress } = props;
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
+    // Run on every render so state transitions that swap the inner DOM
+    // (e.g. capturing → ready flips the icon) keep the button ref current.
+  });
+
+  return (
+    <div
+      ref={(el) => {
+        wrapRef.current = el;
+      }}
+    >
+      <Shutter state={state} elapsedSeconds={elapsedSeconds} onPress={onPress} />
+    </div>
+  );
+}
+
+interface ActionPillWithButtonRefProps {
+  buttonRef: React.MutableRefObject<HTMLButtonElement | null>;
+  variant: 'copy' | 'download' | 'retry';
+  state: 'idle' | 'success' | 'disabled' | 'denied';
+  onPress: () => void;
+}
+
+function ActionPillWithButtonRef(props: ActionPillWithButtonRefProps) {
+  const { buttonRef, variant, state, onPress } = props;
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
+  });
+
+  return (
+    <div
+      ref={(el) => {
+        wrapRef.current = el;
+      }}
+      className={variant === 'copy' ? 'flex-none' : 'flex-1'}
+    >
+      <ActionPill variant={variant} state={state} onPress={onPress} />
+    </div>
   );
 }
 
