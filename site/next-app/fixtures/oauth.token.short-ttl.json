@@ -1,0 +1,6 @@
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test.short-ttl",
+  "token_type": "Bearer",
+  "expires_in": 30,
+  "scope": "api"
+}
