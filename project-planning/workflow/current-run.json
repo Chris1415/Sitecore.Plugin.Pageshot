@@ -10,10 +10,15 @@
   "platform_target": "marketplace",
   "task_breakdown_style": "standard",
   "ui_design": {
-    "proposal_count": 1,
-    "divergence": "subtle",
-    "variant_paths": [],
-    "selected_variant_path": null
+    "proposal_count": 3,
+    "divergence": "radical",
+    "variant_paths": [
+      "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v1.md",
+      "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v2.md",
+      "products/pageshot/project-planning/ui-design/ui-design-20260422T073037Z-v3.md"
+    ],
+    "selected_variant_path": null,
+    "selected_poc_path": null
   },
   "source": {
     "kind": "raw_idea",
