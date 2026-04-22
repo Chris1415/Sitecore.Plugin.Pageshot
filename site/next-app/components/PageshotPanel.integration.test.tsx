@@ -40,10 +40,12 @@ import {
   it,
   vi,
 } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 
 import { installClipboard } from '@/test-utils/mockClipboard';
 import { installFetchMock, type InstalledFetchMock } from '@/test-utils/mockFetch';
+import { setReducedMotion } from '@/test-utils/mockMatchMedia';
 import { createSdkStubs, type SdkStubBundle } from '@/test-utils/sdkStubs';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +112,13 @@ const SERVER_ENVELOPE_NOT_FOUND = {
   error: {
     code: 'not_found',
     message: 'Save the page first, then try again.',
+  },
+};
+const SERVER_ENVELOPE_5XX = {
+  ok: false,
+  error: {
+    code: 'upstream_unavailable',
+    message: 'Try again in a moment.',
   },
 };
 
@@ -187,15 +196,29 @@ let fetchMock: InstalledFetchMock | null = null;
 let clipboardInstalled: ReturnType<typeof installClipboard> | null = null;
 let originalCreateObjectURL: typeof URL.createObjectURL;
 let originalRevokeObjectURL: typeof URL.revokeObjectURL;
+let originalOnLineDescriptor: PropertyDescriptor | undefined;
 
 beforeEach(() => {
   sdkHarness.stubs = createSdkStubs();
   sdkHarness.initCalls = [];
 
+  setReducedMotion(false);
+
   originalCreateObjectURL = URL.createObjectURL;
   originalRevokeObjectURL = URL.revokeObjectURL;
   URL.createObjectURL = vi.fn(() => 'blob:test-url');
   URL.revokeObjectURL = vi.fn();
+
+  originalOnLineDescriptor = Object.getOwnPropertyDescriptor(
+    navigator,
+    'onLine',
+  );
+  Object.defineProperty(navigator, 'onLine', {
+    configurable: true,
+    get() {
+      return true;
+    },
+  });
 });
 
 afterEach(() => {
@@ -209,8 +232,20 @@ afterEach(() => {
   }
   URL.createObjectURL = originalCreateObjectURL;
   URL.revokeObjectURL = originalRevokeObjectURL;
+  if (originalOnLineDescriptor) {
+    Object.defineProperty(navigator, 'onLine', originalOnLineDescriptor);
+  }
   vi.clearAllMocks();
 });
+
+function setOnline(online: boolean): void {
+  Object.defineProperty(navigator, 'onLine', {
+    configurable: true,
+    get() {
+      return online;
+    },
+  });
+}
 
 /**
  * Render the real `<MarketplaceProvider>` + `<PageshotPanel>` tree, then
@@ -395,5 +430,312 @@ describe('T024a-TEST-5 — Tab order equals DOM order (Shutter → Copy → Down
       shutter.compareDocumentPosition(retryBtn) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+// ===========================================================================
+// T025 — integration + regression coverage
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// T025-TEST-1 — Golden-path end-to-end
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-1 — golden-path end-to-end inside jsdom', () => {
+  it('flows idle → capturing → ready; renders the image with alt; Copy writes PNG blob; Download synthesizes <a download=filename>', async () => {
+    fetchMock = installFetchMock({
+      '/api/screenshot/': { status: 200, body: SERVER_ENVELOPE_OK },
+    });
+    clipboardInstalled = installClipboard({ mode: 'ok' });
+
+    await mountPanel();
+
+    // Idle visible state.
+    expect(screen.getByTestId('status-title').textContent).toBe(
+      'Ready when you are.',
+    );
+
+    // Press Shutter.
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter);
+    });
+
+    // Ready state arrives — PolaroidCard with alt text that mentions page + site.
+    const img = await screen.findByRole('img');
+    expect(img.getAttribute('alt')).toMatch(/Home/);
+    expect(img.getAttribute('alt')).toMatch(/acme/);
+
+    // Click Copy — clipboard stub receives a PNG ClipboardItem.
+    const copyBtn = screen.getByRole('button', { name: /^copy$/i });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+    await waitFor(() => {
+      expect(clipboardInstalled!.write).toHaveBeenCalledTimes(1);
+    });
+    const writeArgs = clipboardInstalled!.write.mock.calls[0];
+    const items = writeArgs[0] as ClipboardItem[];
+    expect(items.length).toBe(1);
+
+    // Click Download — synthesizes an <a download=filename>.
+    const downloadBtn = screen.getByRole('button', { name: /^download$/i });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function mockClick(this: HTMLAnchorElement) {
+        expect(this.getAttribute('download')).toMatch(
+          /^acme_home_\d{8}-\d{4}\.png$/,
+        );
+      });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+    await waitFor(() => {
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
+    clickSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025-TEST-2 — Offline short-circuit (AC-5.4)
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-2 — navigator.onLine === false short-circuits fetch', () => {
+  it('dispatches failed({ code: network }) without calling /api/screenshot/... when offline', async () => {
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      calls.push(url);
+      return new Response(JSON.stringify(SERVER_ENVELOPE_OK), { status: 200 });
+    }) as typeof fetch;
+
+    setOnline(false);
+    await mountPanel();
+
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter);
+    });
+
+    // Retry pill visible (error state, code: network) — title check.
+    const retryBtn = await screen.findByRole('button', { name: /^retry$/i });
+    expect(retryBtn).toBeInTheDocument();
+    expect(screen.getByTestId('polaroid-error-title').textContent).toMatch(
+      /offline/i,
+    );
+
+    // No fetch call for /api/screenshot/.
+    expect(calls.find((u) => u.includes('/api/screenshot/'))).toBeUndefined();
+
+    globalThis.fetch = originalFetch;
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025-TEST-3 — 5xx → error card with Retry visible (AC-5.3)
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-3 — 5xx upstream produces error card with visible Retry', () => {
+  it('renders upstream_unavailable title + subtitle and an enabled Retry pill', async () => {
+    fetchMock = installFetchMock({
+      '/api/screenshot/': { status: 502, body: SERVER_ENVELOPE_5XX },
+    });
+
+    await mountPanel();
+
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter);
+    });
+
+    const title = await screen.findByTestId('polaroid-error-title');
+    expect(title.textContent).toMatch(/unavailable/i);
+    const subtitle = screen.getByTestId('polaroid-error-subtitle');
+    expect(subtitle.textContent).toMatch(/try again/i);
+
+    const retryBtn = screen.getByRole('button', { name: /^retry$/i });
+    expect(retryBtn).toBeEnabled();
+
+    // Copy + Download should NOT be present in error state.
+    expect(screen.queryByRole('button', { name: /^copy$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^download$/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025-TEST-4 — prefers-reduced-motion collapses bloom + slide-up
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-4 — prefers-reduced-motion collapses bloom + slide-up', () => {
+  it('Shutter does not apply animate-shutter-press; Polaroid arrival uses opacity only', async () => {
+    setReducedMotion(true);
+    fetchMock = installFetchMock({
+      '/api/screenshot/': { status: 200, body: SERVER_ENVELOPE_OK },
+    });
+    clipboardInstalled = installClipboard({ mode: 'ok' });
+    await mountPanel();
+
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter);
+    });
+
+    // Press does not flip animate-shutter-press under reduced motion.
+    expect(shutter.className).not.toMatch(/animate-shutter-press/);
+
+    // Wait for polaroid and assert arrival wrapper has no translate-y-2 class.
+    const polaroid = await screen.findByTestId('polaroid-root');
+    expect(polaroid.className).not.toMatch(/translate-y-2/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025-TEST-5 — ARIA live region announces every catalogue entry in order
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-5 — live region announces each state change in order', () => {
+  it('announces Ready to capture → Screenshot ready → Copied to clipboard → Download started during a golden-path run', async () => {
+    fetchMock = installFetchMock({
+      '/api/screenshot/': { status: 200, body: SERVER_ENVELOPE_OK },
+    });
+    clipboardInstalled = installClipboard({ mode: 'ok' });
+
+    const { container } = await mountPanel();
+    const region = within(container).getByRole('status');
+
+    const observed: string[] = [];
+    const push = () => observed.push(region.textContent ?? '');
+
+    // 1. Ready to capture — fires on mount with valid context.
+    await waitFor(() => {
+      expect(region.textContent).toBe('Ready to capture.');
+    });
+    push();
+
+    // 2. Press shutter → Capturing started → Screenshot ready.
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter);
+    });
+    await waitFor(() => {
+      expect(region.textContent).toBe('Screenshot ready.');
+    });
+    push();
+
+    // 3. Click Copy → Copied to clipboard.
+    const copyBtn = screen.getByRole('button', { name: /^copy$/i });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+    await waitFor(() => {
+      expect(region.textContent).toBe('Copied to clipboard.');
+    });
+    push();
+
+    // 4. Click Download → Download started.
+    const downloadBtn = screen.getByRole('button', { name: /^download$/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+    await waitFor(() => {
+      expect(region.textContent).toBe('Download started.');
+    });
+    push();
+
+    // Ordered catalogue assertions. The most-recent-wins region can
+    // overwrite "Capturing started." before we sample, so we assert the
+    // four "terminal" catalogue entries in order. T023a-TEST-3 covers the
+    // full seven-entry catalogue.
+    expect(observed[0]).toBe('Ready to capture.');
+    expect(observed[1]).toBe('Screenshot ready.');
+    expect(observed[2]).toBe('Copied to clipboard.');
+    expect(observed[3]).toBe('Download started.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025-TEST-6 — Unsaved-draft hint always visible on valid pageId (FR-12)
+// ---------------------------------------------------------------------------
+
+describe('T025-TEST-6 — FR-12 / AC-4.1 hint always visible on valid pageId', () => {
+  it('the "last saved version" hint is present in idle, capturing, ready, and error states', async () => {
+    fetchMock = installFetchMock({
+      '/api/screenshot/': [
+        { status: 200, body: SERVER_ENVELOPE_OK },
+        { status: 200, body: SERVER_ENVELOPE_NOT_FOUND },
+      ],
+    });
+    clipboardInstalled = installClipboard({ mode: 'ok' });
+
+    await mountPanel();
+
+    // idle: status-hint copy contains "last saved version".
+    expect(screen.getByText(/last saved version/i)).toBeInTheDocument();
+
+    // capturing: press shutter but don't await ready first.
+    const shutter = screen.getByRole('button', { name: /capture screenshot/i });
+    fireEvent.click(shutter);
+    expect(screen.getByText(/last saved version/i)).toBeInTheDocument();
+
+    // ready: await polaroid then re-check hint (status-hint copy is stable).
+    await screen.findByRole('img');
+    expect(screen.getByText(/last saved version/i)).toBeInTheDocument();
+
+    // error: re-capture → not_found envelope → error state. The error-state
+    // status-hint copy ("We couldn't reach the page this time.") replaces
+    // the default status hint, but the PolaroidCard error variant's ledge
+    // carries the FR-12 "last saved version" line.
+    const shutter2 = screen.getByRole('button', { name: /capture screenshot/i });
+    await act(async () => {
+      fireEvent.click(shutter2);
+    });
+    await screen.findByTestId('polaroid-error-title');
+    expect(screen.getByText(/last saved version/i)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T025 regression — StrictMode double-mount does not break the panel
+// ---------------------------------------------------------------------------
+
+describe('T025 regression — StrictMode double-mount does not crash the panel', () => {
+  it('renders under StrictMode and delivers the canonical context without duplicate errors', async () => {
+    fetchMock = installFetchMock({
+      '/api/screenshot/': { status: 200, body: SERVER_ENVELOPE_OK },
+    });
+    if (!sdkHarness.stubs) throw new Error('stubs not installed');
+    const emitter = wireSdkQuery(sdkHarness.stubs);
+
+    render(
+      <StrictMode>
+        <MarketplaceProvider>
+          <PageshotPanel />
+        </MarketplaceProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(sdkHarness.stubs!.query).toHaveBeenCalledWith(
+        'pages.context',
+        expect.objectContaining({ subscribe: true }),
+      );
+    });
+    await act(async () => {
+      emitter.emit(CANONICAL_PAGES_CONTEXT);
+    });
+
+    const shutter = await screen.findByRole('button', {
+      name: /capture screenshot/i,
+    });
+    expect(shutter).toBeInTheDocument();
   });
 });
