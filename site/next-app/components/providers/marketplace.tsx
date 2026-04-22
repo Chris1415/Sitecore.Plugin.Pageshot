@@ -11,6 +11,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -18,29 +19,65 @@ interface ClientSDKProviderProps {
   children: ReactNode;
 }
 
+/**
+ * T007b — PageShot MarketplaceProvider.
+ *
+ * Extends the scaffold's Provider to subscribe to `pages.context` via
+ * **PATH A** (`client.query('pages.context', { subscribe: true, onSuccess })`),
+ * per `client.md § 6a` and § 4c-6. The verb-based `client.subscribe(...)` is
+ * never used for this key — `pages.context` lives in `QueryMap`, not
+ * `SubscribeMap`, and PATH B would fail typecheck (§ 4c-1).
+ *
+ * On unmount: the `unsubscribe` handle returned by `client.query` is invoked,
+ * and `client.destroy()` tears down the PostMessage bridge.
+ *
+ * The hook `usePagesContext()` returns `{ pageId, siteName, pageName } | null`
+ * — `null` until the first `onSuccess` event fires, then the extracted fields
+ * from `pageInfo.id`, `siteInfo.name`, `pageInfo.name`.
+ */
+
+export interface PageshotPagesContext {
+  pageId: string | undefined;
+  siteName: string | undefined;
+  pageName: string | undefined;
+}
+
+/**
+ * Subset of the SDK's `PagesContext` shape (`client.md § 6a`) that this
+ * Provider depends on. Declared locally so the Provider does not need to
+ * import a runtime type from the SDK that may not yet be exported at
+ * top-level — we only care about `pageInfo.id`, `siteInfo.name`,
+ * `pageInfo.name`, all `string | undefined` per the SDK contract.
+ */
+interface PagesContextEvent {
+  siteInfo?: { name?: string };
+  pageInfo?: { id?: string; name?: string };
+}
+
 const ClientSDKContext = createContext<ClientSDK | null>(null);
 const AppContextContext = createContext<ApplicationContext | null>(null);
+const PagesContextContext = createContext<PageshotPagesContext | null>(null);
 
 export const MarketplaceProvider: React.FC<ClientSDKProviderProps> = ({
   children,
 }) => {
   const [client, setClient] = useState<ClientSDK | null>(null);
   const [appContext, setAppContext] = useState<ApplicationContext | null>(null);
+  const [pagesCtx, setPagesCtx] = useState<PageshotPagesContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  // Guard against StrictMode double-mount producing two ClientSDK.init calls
+  // (T007a-TEST-1 idempotency assertion).
+  const initStartedRef = useRef<boolean>(false);
+  // Hold the unsubscribe handle returned by `client.query('pages.context', { subscribe: true })`
+  // so the cleanup effect can invoke it exactly once on unmount.
+  const pagesUnsubscribeRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
-    if (client) {
-      client.query("application.context").then((res) => {
-        if (res?.data) {
-          setAppContext(res.data);
-          console.log("appContext", res.data);
-        }
-      });
+    if (initStartedRef.current) {
+      return;
     }
-  }, [client]);
-
-  useEffect(() => {
+    initStartedRef.current = true;
     const init = async () => {
       const config = {
         target: window.parent,
@@ -48,10 +85,10 @@ export const MarketplaceProvider: React.FC<ClientSDKProviderProps> = ({
       };
       try {
         setLoading(true);
-        const client = await ClientSDK.init(config);
-        setClient(client);
-      } catch (error) {
-        console.error("Error initializing client SDK", error);
+        const created = await ClientSDK.init(config);
+        setClient(created);
+      } catch (err) {
+        console.error("Error initializing client SDK", err);
         setError("Error initializing client SDK");
       } finally {
         setLoading(false);
@@ -60,6 +97,59 @@ export const MarketplaceProvider: React.FC<ClientSDKProviderProps> = ({
 
     init();
   }, []);
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+    client.query("application.context").then((res) => {
+      if (res?.data) {
+        setAppContext(res.data);
+      }
+    });
+  }, [client]);
+
+  useEffect(() => {
+    if (!client) {
+      return;
+    }
+
+    let cancelled = false;
+
+    // PATH A subscription — `client.md § 6a`.
+    client
+      .query("pages.context", {
+        subscribe: true,
+        onSuccess: (data) => {
+          // Fires on initial resolve AND on every subsequent update.
+          const event = data as PagesContextEvent | undefined;
+          setPagesCtx({
+            pageId: event?.pageInfo?.id,
+            siteName: event?.siteInfo?.name,
+            pageName: event?.pageInfo?.name,
+          });
+        },
+        onError: (err) => {
+          console.error("[pageshot][pages.context] error", err);
+        },
+      })
+      .then((res) => {
+        if (cancelled) {
+          // Component unmounted between query invocation and resolution —
+          // tear down the subscription we just wired.
+          res?.unsubscribe?.();
+          return;
+        }
+        pagesUnsubscribeRef.current = res?.unsubscribe;
+      });
+
+    return () => {
+      cancelled = true;
+      pagesUnsubscribeRef.current?.();
+      pagesUnsubscribeRef.current = undefined;
+      client.destroy();
+    };
+  }, [client]);
 
   if (loading) {
     return <div>Attempting to connect to Sitecore Marketplace...</div>;
@@ -89,7 +179,9 @@ export const MarketplaceProvider: React.FC<ClientSDKProviderProps> = ({
   return (
     <ClientSDKContext.Provider value={client}>
       <AppContextContext.Provider value={appContext}>
-        {children}
+        <PagesContextContext.Provider value={pagesCtx}>
+          {children}
+        </PagesContextContext.Provider>
       </AppContextContext.Provider>
     </ClientSDKContext.Provider>
   );
@@ -111,4 +203,15 @@ export const useAppContext = () => {
     throw new Error("useAppContext must be used within a ClientSDKProvider");
   }
   return context;
+};
+
+/**
+ * Read the live `pages.context` values exposed by `<MarketplaceProvider>`.
+ * Returns `null` until the SDK delivers the first `onSuccess` event.
+ * Calling this hook outside the Provider also returns `null` (consumers
+ * that need a hard guard should check for `null` and render their own
+ * loading state — see T008's "Loading page context…" fallback).
+ */
+export const usePagesContext = (): PageshotPagesContext | null => {
+  return useContext(PagesContextContext);
 };

@@ -66,9 +66,6 @@ vi.mock('@sitecore-marketplace-sdk/xmc', () => ({
 import {
   MarketplaceProvider,
   useMarketplaceClient,
-  // `usePagesContext` is introduced in T007b (GREEN). Importing it now makes
-  // T007a fail at module load, which is the correct RED signal.
-  // @ts-expect-error usePagesContext is introduced by T007b
   usePagesContext,
 } from './marketplace';
 
