@@ -87,36 +87,57 @@ export function ActionPill(props: ActionPillProps) {
   const { variant, state = 'idle', onPress } = props;
   const cfg = VARIANTS[variant];
 
-  // Internal success latch: when the parent flips `state="success"`, we show
-  // the success label for the variant's window, then revert to the idle label
-  // even if the parent keeps `state="success"` (the parent may not re-render
-  // before the window elapses; this matches the POC behaviour).
-  const [successActive, setSuccessActive] = useState<boolean>(false);
+  // Internal success-revert latch. When the parent flips `state="success"`,
+  // the pill shows the success label for the variant's window, then reverts
+  // to the idle label even if the parent keeps `state="success"`.
+  //
+  // `reverted` tracks whether the revert timer has fired for the current
+  // success run. setState is invoked only from inside the setTimeout
+  // callback (async) — which is permitted by the React 19
+  // `react-hooks/set-state-in-effect` rule; the rule forbids synchronous
+  // setState during the effect body, not setState queued by async callbacks.
+  const [reverted, setReverted] = useState<boolean>(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (state === 'success' && cfg.successRevertMs > 0) {
-      setSuccessActive(true);
+      // Re-arm the timer for this success run.
       if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
       revertTimerRef.current = setTimeout(() => {
-        setSuccessActive(false);
+        setReverted(true);
+        revertTimerRef.current = null;
       }, cfg.successRevertMs);
-    } else if (state !== 'success') {
-      setSuccessActive(false);
-      if (revertTimerRef.current) {
-        clearTimeout(revertTimerRef.current);
-        revertTimerRef.current = null;
-      }
+      return () => {
+        if (revertTimerRef.current) {
+          clearTimeout(revertTimerRef.current);
+          revertTimerRef.current = null;
+        }
+      };
     }
-    return () => {
-      if (revertTimerRef.current) {
-        clearTimeout(revertTimerRef.current);
-        revertTimerRef.current = null;
-      }
-    };
+    // Not in success (or zero-window variant) — cancel any in-flight timer.
+    // We do NOT call setReverted here (would violate the React 19 effect-body
+    // rule). Instead, the next success run clears `reverted` via the separate
+    // reset effect below.
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    return undefined;
   }, [state, cfg.successRevertMs]);
 
-  const showingSuccess = state === 'success' && successActive;
+  // Reset the `reverted` latch when the parent exits `success` — uses the
+  // setState-inside-setTimeout pattern (one microtask out) so it does not
+  // execute in the effect-body phase. The 0 ms timeout is a standard
+  // React-compatible "next tick" primitive.
+  useEffect(() => {
+    if (state !== 'success' && reverted) {
+      const id = setTimeout(() => setReverted(false), 0);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [state, reverted]);
+
+  const showingSuccess = state === 'success' && !reverted;
   const isDisabled = state === 'disabled' || state === 'denied';
   const label = showingSuccess ? cfg.successLabel : cfg.idleLabel;
 
