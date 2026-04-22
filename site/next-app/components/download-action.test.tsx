@@ -86,6 +86,7 @@ describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes U
       expect(this.getAttribute('href')).toMatch(/^blob:mock-/);
     });
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => {
       await result.current.download();
     });
@@ -105,9 +106,14 @@ describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes U
     // Anchor click fired once.
     expect(clickSpy).toHaveBeenCalledTimes(1);
 
-    // Revoke called once after click.
+    // Revoke is DEFERRED 60s so the download doesn't get killed mid-flight
+    // in Chrome/sandboxed iframes. Before the timer elapses, the URL is still
+    // live; after 60s, revoke has been called once with the same URL.
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(60_000);
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(revokedUrls).toEqual(createdUrls);
+    vi.useRealTimers();
 
     clickSpy.mockRestore();
   });
