@@ -5,7 +5,7 @@
   "updated_at": "2026-04-22T07:30:37Z",
   "product_slug": "pageshot",
   "product_root": "products/pageshot",
-  "status": "qa_ready",
+  "status": "implementation_in_progress",
   "prd_input_mode": "prompt_only",
   "platform_target": "marketplace",
   "task_breakdown_style": "tdd",
@@ -95,9 +95,9 @@
   ],
   "implementation": {
     "mode": "pipeline",
-    "target_directory": "products/pageshot/site",
+    "target_directory": "products/pageshot/site/next-app",
     "branch_name": "prd-000",
-    "status": "not_started",
+    "status": "in_progress",
     "resumed_from_stage": null
   },
   "notes": [
