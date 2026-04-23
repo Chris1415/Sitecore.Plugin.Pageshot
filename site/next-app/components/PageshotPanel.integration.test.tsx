@@ -474,7 +474,7 @@ describe('T025-TEST-1 — golden-path end-to-end inside jsdom', () => {
     await waitFor(() => {
       expect(clipboardInstalled!.write).toHaveBeenCalledTimes(1);
     });
-    const writeArgs = clipboardInstalled!.write.mock.calls[0];
+    const writeArgs = clipboardInstalled!.write.mock.calls[0]!;
     const items = writeArgs[0] as ClipboardItem[];
     expect(items.length).toBe(1);
 

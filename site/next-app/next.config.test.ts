@@ -15,14 +15,14 @@ describe('next.config.mjs — PNA headers (T003-TEST-1)', () => {
       nextConfig as { headers: () => Promise<Array<{ source: string; headers: Array<{ key: string; value: string }> }>> }
     ).headers();
     expect(rules).toHaveLength(1);
-    expect(rules[0].source).toBe('/:path*');
+    expect(rules[0]!.source).toBe('/:path*');
   });
 
   it('sets the four Chrome Local Network Access headers', async () => {
     const rules = await (
       nextConfig as { headers: () => Promise<Array<{ source: string; headers: Array<{ key: string; value: string }> }>> }
     ).headers();
-    const headers = rules[0].headers;
+    const headers = rules[0]!.headers;
     const byKey = new Map(headers.map((h) => [h.key, h.value]));
 
     expect(byKey.get('Access-Control-Allow-Private-Network')).toBe('true');
@@ -37,7 +37,7 @@ describe('next.config.mjs — PNA headers (T003-TEST-1)', () => {
     const rules = await (
       nextConfig as { headers: () => Promise<Array<{ source: string; headers: Array<{ key: string; value: string }> }>> }
     ).headers();
-    const credsHeader = rules[0].headers.find((h) => h.key === 'Access-Control-Allow-Credentials');
+    const credsHeader = rules[0]!.headers.find((h) => h.key === 'Access-Control-Allow-Credentials');
     expect(credsHeader?.value).not.toBe('true');
   });
 });

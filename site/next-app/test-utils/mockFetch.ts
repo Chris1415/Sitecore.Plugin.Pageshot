@@ -37,11 +37,14 @@ export function installFetchMock(table: MockFetchTable): InstalledFetchMock {
     if (!key) {
       throw new Error(`[mockFetch] No fixture registered for URL: ${url}`);
     }
-    const entry = table[key];
+    const entry = table[key]!;
     const list = Array.isArray(entry) ? entry : [entry];
     const idx = Math.min(cursor.get(key) ?? 0, list.length - 1);
     cursor.set(key, (cursor.get(key) ?? 0) + 1);
     const spec = list[idx];
+    if (!spec) {
+      throw new Error(`[mockFetch] no entry at index ${idx} for URL: ${url}`);
+    }
 
     if (typeof spec === 'function') {
       return spec(new Request(url, init));

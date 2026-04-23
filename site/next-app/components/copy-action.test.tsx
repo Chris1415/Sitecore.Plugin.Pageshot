@@ -72,12 +72,12 @@ describe('T020a-TEST-1 — Successful copy writes ClipboardItem with correct blo
     });
 
     expect(installed.write).toHaveBeenCalledTimes(1);
-    const args = installed.write.mock.calls[0];
+    const args = installed.write.mock.calls[0]!;
     const items = args[0] as ClipboardItem[];
     expect(Array.isArray(items)).toBe(true);
     expect(items.length).toBe(1);
 
-    const item = items[0];
+    const item = items[0]!;
     // `ClipboardItem` exposes its declared types via `.types` and returns the
     // blob via `.getType(type)`. The component promises a single
     // `image/png` entry.

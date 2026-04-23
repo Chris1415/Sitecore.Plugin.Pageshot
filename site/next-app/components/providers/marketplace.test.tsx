@@ -181,7 +181,7 @@ describe('T007a-TEST-1 — ClientSDK.init call shape', () => {
     });
 
     expect(sdkHarness.initCalls).toHaveLength(1);
-    const [config] = sdkHarness.initCalls;
+    const config = sdkHarness.initCalls[0]!;
     expect(config.target).toBe(window.parent);
     expect(Array.isArray(config.modules)).toBe(true);
     // The XMC module-mock marker flows through; assert XMC is present in modules.

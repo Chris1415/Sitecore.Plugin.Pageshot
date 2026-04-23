@@ -92,10 +92,10 @@ describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes U
     // createObjectURL called exactly once with a PNG blob.
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(createdBlobs.length).toBe(1);
-    expect(createdBlobs[0].type).toBe('image/png');
+    expect(createdBlobs[0]!.type).toBe('image/png');
 
     // PNG magic-bytes assertion.
-    const ab = await createdBlobs[0].arrayBuffer();
+    const ab = await createdBlobs[0]!.arrayBuffer();
     const bytes = new Uint8Array(ab.slice(0, 8));
     for (let i = 0; i < PNG_MAGIC_BYTES.length; i++) {
       expect(bytes[i]).toBe(PNG_MAGIC_BYTES[i]);
