@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Passepartout — PageShot v3 POC</title>
+
+  <!-- Google Fonts: Source Serif 4 + Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=Inter:wght@400;500;600&display=swap"
+  />
+
+  <style>
+    /* -----------------------------------------------------------
+       Design tokens (translated from Tailwind stone + custom hex)
+       ----------------------------------------------------------- */
+    :root {
+      --wall:        #F5F1E8;           /* stone-50-ish wall outside panel */
+      --bone:        #FAF7F0;           /* passepartout paper / card fill */
+      --bone-inner:  #FDFBF5;           /* preview mat inner fill */
+      --ink:         #1C1917;           /* stone-900 body ink */
+      --ink-muted:   #44403C;           /* stone-700/800 */
+      --muted:       #57534E;           /* stone-600 */
+      --secondary:   #78716C;           /* stone-500 */
+      --rule:        #D6D3D1;           /* stone-300 hairline */
+      --rule-soft:   #E7E5E4;           /* stone-200 */
+      --stone-700:   #44403C;
+      --oxblood:     #7A1E1E;           /* error + in-flight only */
+      --hairline:    1px;
+
+      --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+      --sans:  'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+
+      --fade-ms: 200ms;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+    body {
+      margin: 0;
+      background: var(--wall);
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 15px;
+      line-height: 1.55;
+      letter-spacing: -0.01em;
+      min-height: 100vh;
+      padding: 32px 16px 96px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* -----------------------------------------------------------
+       Dev controls strip (styled distinctly from the design)
+       ----------------------------------------------------------- */
+    .dev-strip {
+      width: min(680px, 100%);
+      background: #ffffff;
+      border: 1px dashed #B8B3A8;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .dev-strip h1 {
+      margin: 0;
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    .dev-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dev-row > .dev-label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--secondary);
+      margin-right: 4px;
+    }
+
+    .dev-btn {
+      font-family: var(--sans);
+      font-size: 12px;
+      background: #F5F1E8;
+      border: 1px solid #C9C3B6;
+      color: var(--ink);
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 2px;
+      line-height: 1;
+    }
+
+    .dev-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: #F5F1E8;
+      border-color: var(--ink);
+    }
+
+    .dev-btn:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    /* -----------------------------------------------------------
+       Iframe-edge wrapper around the panel
+       ----------------------------------------------------------- */
+    .iframe-shell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .iframe-shell > .iframe-label {
+      font-family: var(--sans);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--secondary);
+    }
+
+    .iframe-edge {
+      border: 1px dashed #B8B3A8;
+      padding: 1px;
+      transition: width var(--fade-ms) ease-out;
+    }
+
+    /* -----------------------------------------------------------
+       PANEL — the actual design surface
+       ----------------------------------------------------------- */
+    .panel {
+      width: 360px; /* overridden by data-width */
+      height: 900px;
+      background: var(--bone);
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      color: var(--ink);
+      font-family: var(--serif);
+    }
+
+    .panel[data-width="320"] { width: 320px; }
+    .panel[data-width="360"] { width: 360px; }
+    .panel[data-width="400"] { width: 400px; }
+
+    /* Masthead ---------------------------------------------------- */
+    .masthead {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(250, 247, 240, 0.95);
+      backdrop-filter: saturate(1.1) blur(6px);
+      -webkit-backdrop-filter: saturate(1.1) blur(6px);
+      border-bottom: var(--hairline) solid var(--rule);
+      padding: 14px 20px 12px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .masthead__mark {
+      font-family: var(--serif);
+      font-size: 13px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--ink);
+      font-weight: 500;
+      position: relative;
+      padding-bottom: 4px;
+    }
+    .masthead__mark::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 1px;
+      background: var(--rule);
+    }
+
+    .panel[data-width="320"] .masthead__mark { letter-spacing: 0.22em; }
+
+    .masthead__meta {
+      font-family: var(--sans);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--secondary);
+    }
+
+    /* Card -------------------------------------------------------- */
+    .card {
+      margin: 20px 16px 0;
+      background: var(--bone);
+      border: var(--hairline) solid var(--rule);
+      padding: 20px;
+      position: relative;
+    }
+    .panel[data-width="320"] .card { margin: 16px 12px 0; padding: 14px; }
+    .panel[data-width="400"] .card { padding: 22px; }
+
+    .plate-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .plate-label__numeral {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      color: var(--secondary);
+      letter-spacing: 0.04em;
+    }
+
+    .plate-label__aside {
+      font-family: var(--sans);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #A8A29E;
+    }
+
+    /* Preview frame ---------------------------------------------- */
+    .preview {
+      position: relative;
+      border: var(--hairline) solid var(--rule);
+      background: var(--bone-inner);
+      padding: 8px;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      transition: opacity var(--fade-ms) ease-out;
+    }
+
+    .preview__inner {
+      width: 100%;
+      height: 100%;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      text-align: center;
+      padding: 18px 14px;
+      transition: opacity var(--fade-ms) ease-out;
+    }
+
+    .preview__text {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+      max-width: 28ch;
+    }
+
+    .preview__image {
+      width: 100%;
+      height: auto;
+      max-height: min(70vh, 560px);
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Capturing state */
+    .panel[data-state="capturing"] .preview { opacity: 0.92; }
+    .panel[data-state="capturing"] .preview__inner { color: var(--oxblood); }
+
+    /* Error state — oxblood corner tick */
+    .preview__error-mark {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 14px;
+      height: 14px;
+      display: none;
+      pointer-events: none;
+    }
+    .panel[data-state="error"] .preview__error-mark { display: block; }
+
+    /* Plate numeral display above preview in READY (big serif lockup) */
+    .plate-lockup {
+      text-align: center;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .panel[data-state="ready"] .plate-lockup { display: block; }
+
+    .plate-lockup__label {
+      font-family: var(--sans);
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--secondary);
+      display: block;
+      margin-bottom: 2px;
+    }
+    .plate-lockup__numeral {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+      font-style: italic;
+      line-height: 1;
+    }
+
+    /* Caption block (READY) -------------------------------------- */
+    .caption {
+      margin-top: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 3px;
+      text-align: left;
+    }
+    .panel[data-state="ready"] .caption { display: flex; }
+
+    .caption__site {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      font-variant: small-caps;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .caption__page {
+      font-family: var(--serif);
+      font-size: 17px;
+      line-height: 1.25;
+      color: var(--ink);
+    }
+    .caption__meta {
+      margin-top: 4px;
+      font-family: var(--sans);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Hint rule --------------------------------------------------- */
+    .hint {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: var(--hairline) solid var(--rule-soft);
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .panel[data-state="capturing"] .hint,
+    .panel[data-state="error"] .hint { display: none; }
+
+    /* Elapsed timer (capturing ≥5s) ------------------------------ */
+    .elapsed {
+      margin-top: 14px;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      color: var(--secondary);
+      text-align: center;
+      display: none;
+    }
+    .elapsed.is-visible { display: block; }
+
+    /* Inline message --------------------------------------------- */
+    .inline-message {
+      margin-top: 10px;
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 1.2em;
+      transition: opacity var(--fade-ms) ease-out;
+    }
+    .inline-message[data-tone="error"] { color: var(--oxblood); }
+    .inline-message[data-tone="success"] { color: var(--muted); }
+    .inline-message.is-hidden { opacity: 0; }
+
+    /* Action strip ----------------------------------------------- */
+    .actions {
+      margin: 20px 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel[data-width="320"] .actions { margin: 16px 12px 0; }
+
+    .panel[data-width="400"] .actions.actions--ready,
+    .panel[data-width="360"] .actions.actions--ready {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .btn {
+      font-family: var(--sans);
+      font-size: 13px;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid #A8A29E;
+      padding: 12px 14px;
+      min-height: 44px;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      transition: background-color 120ms ease-out, border-color 120ms ease-out, opacity var(--fade-ms) ease-out;
+      border-radius: 0;
+      letter-spacing: 0.01em;
+    }
+    .btn:hover { background: rgba(120, 113, 108, 0.06); }
+    .btn:active { background: rgba(120, 113, 108, 0.12); }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--bone);
+    }
+    .btn[disabled],
+    .btn[aria-disabled="true"] {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn--primary {
+      font-family: var(--serif);
+      font-size: 14px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      background: var(--bone);
+      border: 1.5px solid var(--stone-700);
+      color: var(--ink);
+      padding: 14px 16px;
+      justify-content: center;
+    }
+    .btn--primary:hover { background: #F3EFE3; }
+
+    .btn--danger-accent {
+      border-color: var(--oxblood);
+      color: var(--oxblood);
+    }
+
+    .btn__glyph {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Foot note --------------------------------------------------- */
+    .foot {
+      margin: 28px 16px 24px;
+      padding-top: 12px;
+      border-top: var(--hairline) solid var(--rule-soft);
+      font-family: var(--sans);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--secondary);
+    }
+    .panel[data-width="320"] .foot { margin: 24px 12px 20px; }
+
+    /* Aperture glyph spin --------------------------------------- */
+    .aperture-glyph {
+      width: 40px;
+      height: 40px;
+      color: var(--secondary);
+    }
+    .panel[data-state="capturing"] .aperture-glyph { color: var(--oxblood); }
+    .panel[data-state="capturing"] .aperture-glyph--spins {
+      animation: spin 1.2s linear infinite;
+      transform-origin: 50% 50%;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error title ------------------------------------------------- */
+    .error-title {
+      font-family: var(--serif);
+      font-size: 16px;
+      color: var(--oxblood);
+      font-style: normal;
+      line-height: 1.3;
+      max-width: 30ch;
+      margin-bottom: 4px;
+    }
+    .error-body {
+      font-family: var(--serif);
+      font-size: 14px;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.5;
+      max-width: 30ch;
+    }
+
+    /* Visibility helpers ----------------------------------------- */
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .state-block { display: none; }
+    .panel[data-state="idle"]      .state-block[data-show="idle"]      { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .panel[data-state="capturing"] .state-block[data-show="capturing"] { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .panel[data-state="ready"]     .state-block[data-show="ready"]     { display: block; width: 100%; }
+    .panel[data-state="error"]     .state-block[data-show="error"]     { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+    /* Capture action visibility by state -------------------------- */
+    .panel[data-state="idle"]      .actions__retry,
+    .panel[data-state="capturing"] .actions__retry,
+    .panel[data-state="ready"]     .actions__retry { display: none; }
+
+    .panel[data-state="error"]     .actions__copy,
+    .panel[data-state="error"]     .actions__download,
+    .panel[data-state="idle"]      .actions__copy,
+    .panel[data-state="idle"]      .actions__download,
+    .panel[data-state="capturing"] .actions__copy,
+    .panel[data-state="capturing"] .actions__download { opacity: 0.4; }
+
+    /* Capture button loading state */
+    .panel[data-state="capturing"] .actions__capture { opacity: 0.55; pointer-events: none; }
+
+    .primary-label-default { display: inline; }
+    .primary-label-capturing { display: none; }
+    .panel[data-state="capturing"] .primary-label-default { display: none; }
+    .panel[data-state="capturing"] .primary-label-capturing { display: inline; }
+
+    /* Reduced motion --------------------------------------------- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    /* Screenshot placeholder SVG container */
+    .screenshot-placeholder {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background:
+        linear-gradient(180deg, #EEE9DC 0%, #E4DECE 100%);
+      position: relative;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- Dev controls ---------------------------------------------------- -->
+  <section class="dev-strip" aria-label="Development controls">
+    <h1>Passepartout — PageShot v3 POC</h1>
+    <div class="dev-row">
+      <span class="dev-label">Width</span>
+      <button class="dev-btn" data-width-toggle="320">320</button>
+      <button class="dev-btn" data-width-toggle="360" aria-pressed="true">360</button>
+      <button class="dev-btn" data-width-toggle="400">400</button>
+    </div>
+    <div class="dev-row">
+      <span class="dev-label">State</span>
+      <button class="dev-btn" data-state-toggle="idle" aria-pressed="true">Idle</button>
+      <button class="dev-btn" data-state-toggle="capturing">Capturing</button>
+      <button class="dev-btn" data-state-toggle="ready">Ready</button>
+      <button class="dev-btn" data-state-toggle="error">Error</button>
+    </div>
+  </section>
+
+  <!-- Iframe-edge label ------------------------------------------------ -->
+  <div class="iframe-shell">
+    <div class="iframe-label" id="iframe-label">Sitecore Pages Context Panel · 360 × 900</div>
+    <div class="iframe-edge" id="iframe-edge">
+      <!-- PANEL ------------------------------------------------------- -->
+      <article class="panel" id="panel" data-state="idle" data-width="360" aria-label="PageShot capture panel">
+
+        <!-- Masthead ------------------------------------------------- -->
+        <header class="masthead">
+          <div class="masthead__mark" aria-label="PageShot">P&nbsp;A&nbsp;G&nbsp;E&nbsp;S&nbsp;H&nbsp;O&nbsp;T</div>
+          <div class="masthead__meta" aria-hidden="true">Capture</div>
+        </header>
+
+        <!-- Exhibit card -------------------------------------------- -->
+        <section class="card" aria-labelledby="card-title">
+          <h2 id="card-title" class="sr-only">Current plate</h2>
+
+          <!-- Plate lockup (READY only) ------------------------------ -->
+          <div class="plate-lockup" aria-hidden="true">
+            <span class="plate-lockup__label">Exhibit</span>
+            <span class="plate-lockup__numeral">Plate I</span>
+          </div>
+
+          <!-- Plate label (small top-right numeral) ------------------ -->
+          <div class="plate-label">
+            <span class="plate-label__aside" id="plate-aside">Current exhibit</span>
+            <span class="plate-label__numeral" id="plate-numeral">Plate I</span>
+          </div>
+
+          <!-- Preview frame ------------------------------------------ -->
+          <figure class="preview" id="preview">
+
+            <!-- oxblood corner tick shown in error only -->
+            <svg class="preview__error-mark" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M0 0 L14 0 L14 14" fill="none" stroke="#7A1E1E" stroke-width="1.25"/>
+            </svg>
+
+            <div class="preview__inner">
+
+              <!-- IDLE ------------------------------------------------ -->
+              <div class="state-block" data-show="idle">
+                <svg class="aperture-glyph" viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Aperture: outer circle + 6 blades -->
+                  <circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="1.25"/>
+                  <path d="M16 4 L22.5 15 L9.5 15 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                  <path d="M26.4 10 L21.5 22 L15.5 11.5 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                  <path d="M26.4 22 L13.5 22 L20.5 10.5 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                  <path d="M16 28 L9.5 17 L22.5 17 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                  <path d="M5.6 22 L10.5 10 L16.5 20.5 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                  <path d="M5.6 10 L18.5 10 L11.5 21.5 Z" fill="none" stroke="currentColor" stroke-width="1" opacity="0.55"/>
+                </svg>
+                <p class="preview__text">Click Capture to take a plate of this page.</p>
+              </div>
+
+              <!-- CAPTURING ------------------------------------------- -->
+              <div class="state-block" data-show="capturing">
+                <svg class="aperture-glyph aperture-glyph--spins" viewBox="0 0 32 32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="1.25"/>
+                  <path d="M16 4 A12 12 0 0 1 28 16" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="16" cy="16" r="2.2" fill="currentColor"/>
+                </svg>
+                <p class="preview__text">Preparing plate…</p>
+              </div>
+
+              <!-- READY ---------------------------------------------- -->
+              <div class="state-block" data-show="ready">
+                <!-- Placeholder "screenshot" as an editorial SVG ------- -->
+                <svg class="preview__image" viewBox="0 0 640 360" role="img" aria-label="Screenshot of landing-spring-campaign on hahn-solo"
+                     xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stop-color="#F2ECDC"/>
+                      <stop offset="100%" stop-color="#DCD3BE"/>
+                    </linearGradient>
+                    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%"   stop-color="#C9BFA6"/>
+                      <stop offset="100%" stop-color="#A8A08A"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="640" height="360" fill="url(#bg)"/>
+                  <!-- faux header -->
+                  <rect x="0" y="0" width="640" height="36" fill="#FAF7F0" opacity="0.7"/>
+                  <line x1="0" y1="36" x2="640" y2="36" stroke="#B8B0A0" stroke-width="0.6"/>
+                  <circle cx="24" cy="18" r="4" fill="#6E675A" opacity="0.55"/>
+                  <rect x="560" y="14" width="60" height="8" fill="#6E675A" opacity="0.45"/>
+                  <!-- hero composition -->
+                  <rect x="40" y="68" width="240" height="210" fill="url(#hero)" opacity="0.9"/>
+                  <line x1="40" y1="68" x2="280" y2="68" stroke="#7C7464" stroke-width="0.6"/>
+                  <line x1="40" y1="278" x2="280" y2="278" stroke="#7C7464" stroke-width="0.6"/>
+                  <!-- text lockup right side -->
+                  <rect x="310" y="72" width="22" height="8"  fill="#7C7464" opacity="0.6"/>
+                  <rect x="310" y="96" width="270" height="22" fill="#2C2721" opacity="0.85"/>
+                  <rect x="310" y="124" width="230" height="22" fill="#2C2721" opacity="0.85"/>
+                  <rect x="310" y="152" width="180" height="22" fill="#2C2721" opacity="0.85"/>
+                  <rect x="310" y="200" width="260" height="6"  fill="#4A4439" opacity="0.6"/>
+                  <rect x="310" y="212" width="240" height="6"  fill="#4A4439" opacity="0.6"/>
+                  <rect x="310" y="224" width="220" height="6"  fill="#4A4439" opacity="0.6"/>
+                  <rect x="310" y="258" width="96"  height="28" fill="none" stroke="#2C2721" stroke-width="1"/>
+                  <!-- footer strip -->
+                  <line x1="40" y1="320" x2="600" y2="320" stroke="#B8B0A0" stroke-width="0.6"/>
+                  <rect x="40" y="334" width="100" height="6" fill="#7C7464" opacity="0.55"/>
+                  <rect x="500" y="334" width="100" height="6" fill="#7C7464" opacity="0.55"/>
+                </svg>
+              </div>
+
+              <!-- ERROR ----------------------------------------------- -->
+              <div class="state-block" data-show="error">
+                <p class="error-title">Capture unavailable.</p>
+                <p class="error-body">The capture service is temporarily unavailable. Try again in a moment.</p>
+              </div>
+
+            </div>
+          </figure>
+
+          <!-- Caption (READY only) ----------------------------------- -->
+          <figcaption class="caption">
+            <span class="caption__site">hahn-solo</span>
+            <span class="caption__page">landing-spring-campaign</span>
+            <span class="caption__meta">2026.04.22 · 09:42 · 1280×720</span>
+          </figcaption>
+
+          <!-- Elapsed timer (capturing ≥ 5 s) ------------------------- -->
+          <p class="elapsed" id="elapsed" aria-hidden="true">Still exposing · <span id="elapsed-s">6</span> s</p>
+
+          <!-- Hint rule ---------------------------------------------- -->
+          <p class="hint" id="hint">The plate shows the last saved version of this page.</p>
+        </section>
+
+        <!-- Action strip ------------------------------------------- -->
+        <div class="actions actions--ready" id="actions">
+          <button type="button" class="btn btn--quiet actions__retry btn--danger-accent" id="btn-retry">
+            <span>Retry</span>
+            <svg class="btn__glyph" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M13 8 A5 5 0 1 1 8 3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+              <path d="M8 1 L8 5 L12 5" fill="none" stroke="currentColor" stroke-width="1.25"/>
+            </svg>
+          </button>
+
+          <button type="button" class="btn btn--primary actions__capture" id="btn-capture" aria-describedby="live">
+            <svg class="btn__glyph" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.25"/>
+              <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+            </svg>
+            <span>
+              <span class="primary-label-default">Capture</span>
+              <span class="primary-label-capturing">Exposing…</span>
+            </span>
+            <span aria-hidden="true" style="width:16px"></span>
+          </button>
+
+          <button type="button" class="btn btn--quiet actions__copy" id="btn-copy">
+            <span>Copy image</span>
+            <svg class="btn__glyph" viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="4" y="4" width="9" height="10" fill="none" stroke="currentColor" stroke-width="1.25"/>
+              <path d="M3 11 L3 2 L11 2" fill="none" stroke="currentColor" stroke-width="1.25"/>
+            </svg>
+          </button>
+
+          <button type="button" class="btn btn--quiet actions__download" id="btn-download">
+            <span>Download PNG</span>
+            <svg class="btn__glyph" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 1 L8 11" fill="none" stroke="currentColor" stroke-width="1.25"/>
+              <path d="M4 7 L8 11 L12 7" fill="none" stroke="currentColor" stroke-width="1.25"/>
+              <path d="M2 14 L14 14" fill="none" stroke="currentColor" stroke-width="1.25"/>
+            </svg>
+          </button>
+
+          <div class="inline-message is-hidden" id="inline-message" role="status" aria-live="polite"></div>
+        </div>
+
+        <!-- Foot rule --------------------------------------------- -->
+        <p class="foot">An authoring-time capture tool. No images are stored.</p>
+
+        <!-- ARIA live region (invisible) -------------------------- -->
+        <div class="sr-only" id="live" role="status" aria-live="polite" aria-atomic="true"></div>
+
+      </article>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const panel      = document.getElementById('panel');
+      const iframeLbl  = document.getElementById('iframe-label');
+      const liveRegion = document.getElementById('live');
+      const inlineMsg  = document.getElementById('inline-message');
+      const elapsed    = document.getElementById('elapsed');
+      const elapsedS   = document.getElementById('elapsed-s');
+      const plateAside = document.getElementById('plate-aside');
+
+      const btnCapture  = document.getElementById('btn-capture');
+      const btnCopy     = document.getElementById('btn-copy');
+      const btnDownload = document.getElementById('btn-download');
+      const btnRetry    = document.getElementById('btn-retry');
+
+      const widthBtns = Array.from(document.querySelectorAll('[data-width-toggle]'));
+      const stateBtns = Array.from(document.querySelectorAll('[data-state-toggle]'));
+
+      let captureTimer = null;
+      let elapsedTimer = null;
+      let elapsedStart = 0;
+      let announcedStillCapturing = false;
+
+      function announce(msg) {
+        liveRegion.textContent = '';
+        // force SR to pick up change
+        setTimeout(() => { liveRegion.textContent = msg; }, 30);
+      }
+
+      function showInline(msg, tone, holdMs) {
+        inlineMsg.textContent = msg;
+        inlineMsg.setAttribute('data-tone', tone || 'info');
+        inlineMsg.classList.remove('is-hidden');
+        if (holdMs) {
+          clearTimeout(inlineMsg._t);
+          inlineMsg._t = setTimeout(() => {
+            inlineMsg.classList.add('is-hidden');
+          }, holdMs);
+        }
+      }
+
+      function clearElapsed() {
+        if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+        elapsed.classList.remove('is-visible');
+        announcedStillCapturing = false;
+      }
+
+      function setState(next) {
+        clearTimeout(captureTimer);
+        clearElapsed();
+        inlineMsg.classList.add('is-hidden');
+
+        panel.setAttribute('data-state', next);
+
+        // plate aside copy tweaks per state
+        if (next === 'idle')      plateAside.textContent = 'Awaiting plate';
+        if (next === 'capturing') plateAside.textContent = 'Exposing';
+        if (next === 'ready')     plateAside.textContent = 'Current exhibit';
+        if (next === 'error')     plateAside.textContent = 'Plate unavailable';
+
+        // sync state toggle pressed state
+        stateBtns.forEach(b => {
+          b.setAttribute('aria-pressed', b.dataset.stateToggle === next ? 'true' : 'false');
+        });
+
+        // announcements
+        if (next === 'capturing') announce('Capturing screenshot.');
+        if (next === 'ready')     announce('Screenshot ready. 1280 by 720.');
+        if (next === 'error')     announce('The capture service is temporarily unavailable. Try again in a moment.');
+
+        // capturing auto-advance
+        if (next === 'capturing') {
+          elapsedStart = Date.now();
+          elapsedTimer = setInterval(() => {
+            const s = Math.round((Date.now() - elapsedStart) / 1000);
+            if (s >= 5) {
+              elapsed.classList.add('is-visible');
+              elapsedS.textContent = s;
+              if (!announcedStillCapturing) {
+                announce('Still capturing.');
+                announcedStillCapturing = true;
+              }
+            }
+          }, 1000);
+          captureTimer = setTimeout(() => { setState('ready'); }, 2400);
+        }
+      }
+
+      // Wire up panel buttons
+      btnCapture.addEventListener('click', () => {
+        if (panel.getAttribute('data-state') === 'capturing') return;
+        setState('capturing');
+      });
+
+      btnRetry.addEventListener('click', () => {
+        setState('capturing');
+      });
+
+      btnCopy.addEventListener('click', () => {
+        if (panel.getAttribute('data-state') !== 'ready') return;
+        showInline('Copied to clipboard.', 'success', 2000);
+        announce('Copied to clipboard.');
+      });
+
+      btnDownload.addEventListener('click', () => {
+        if (panel.getAttribute('data-state') !== 'ready') return;
+        // Build a tiny placeholder PNG-ish data URL (SVG download, universally supported)
+        const svg = document.querySelector('.preview__image');
+        if (!svg) return;
+        const xml = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([xml], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'hahn-solo_landing-spring-campaign_2026-04-22T0942.svg';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showInline('Download started.', 'info', 2000);
+      });
+
+      // Dev controls: width
+      widthBtns.forEach(b => {
+        b.addEventListener('click', () => {
+          const w = b.dataset.widthToggle;
+          panel.setAttribute('data-width', w);
+          widthBtns.forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false'));
+          iframeLbl.textContent = `Sitecore Pages Context Panel · ${w} × 900`;
+        });
+      });
+
+      // Dev controls: state
+      stateBtns.forEach(b => {
+        b.addEventListener('click', () => {
+          setState(b.dataset.stateToggle);
+        });
+      });
+
+      // Initial state announce + aside
+      plateAside.textContent = 'Awaiting plate';
+    })();
+  </script>
+</body>
+</html>

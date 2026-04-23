@@ -1,0 +1,4 @@
+{
+  "siteInfo": { "id": "s1", "name": "acme", "displayName": "Acme Marketing" },
+  "pageInfo": { "id": "p1", "name": "Home", "displayName": "Home", "path": "/" }
+}

@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PageShot · Graphite Console · poc-v1</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="stage">
+      <!-- Dev-aids strip -->
+      <header class="devbar" aria-label="Clickdummy controls (dev aids)">
+        <div class="devbar__title">
+          <span class="devbar__dot" aria-hidden="true"></span>
+          <span>Graphite Console &mdash; PageShot v1 POC</span>
+        </div>
+
+        <div class="devbar__group" role="group" aria-label="Panel width">
+          <span class="devbar__legend">width</span>
+          <button type="button" class="devbtn" data-width="320">320</button>
+          <button type="button" class="devbtn is-active" data-width="360">360</button>
+          <button type="button" class="devbtn" data-width="400">400</button>
+        </div>
+
+        <div class="devbar__group" role="group" aria-label="Panel state">
+          <span class="devbar__legend">state</span>
+          <button type="button" class="devbtn is-active" data-state="idle">Idle</button>
+          <button type="button" class="devbtn" data-state="capturing">Capturing</button>
+          <button type="button" class="devbtn" data-state="ready">Ready</button>
+          <button type="button" class="devbtn" data-state="error">Error</button>
+        </div>
+      </header>
+
+      <!-- Iframe-context frame -->
+      <div class="frame" id="frame" style="--panel-w: 360px">
+        <div class="frame__label">
+          <span>Sitecore Pages Context Panel</span>
+          <span class="frame__label-dim">&middot; <span id="frame-dims">360 &times; 900</span></span>
+        </div>
+
+        <!-- The panel itself -->
+        <main class="panel" id="panel" data-state="idle" aria-label="PageShot panel">
+          <!-- Header -->
+          <header class="panel__header">
+            <div class="brand">
+              <svg
+                class="brand__glyph"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+                <path
+                  d="M8 1.5 L10.3 5.5 L14.5 8 L10.3 10.5 L8 14.5 L5.7 10.5 L1.5 8 L5.7 5.5 Z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.1"
+                  stroke-linejoin="round"
+                />
+                <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+              </svg>
+              <span class="brand__word">PageShot</span>
+            </div>
+            <span class="version" aria-label="version 1 beta">
+              <span class="led" aria-hidden="true"></span>
+              v1 &middot; &beta;
+            </span>
+          </header>
+
+          <!-- Context block -->
+          <section class="block" aria-labelledby="ctx-label">
+            <div class="section-label" id="ctx-label">Context</div>
+            <dl class="meta">
+              <div class="meta__row">
+                <dt class="meta__key">site</dt>
+                <dd class="meta__val">hahn-solo</dd>
+              </div>
+              <div class="meta__row">
+                <dt class="meta__key">page</dt>
+                <dd class="meta__val">landing-spring-campaign</dd>
+              </div>
+              <div class="meta__row">
+                <dt class="meta__key">id</dt>
+                <dd class="meta__val">C7A3E12B&middot;9e2b</dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Primary action -->
+          <section class="block">
+            <button
+              type="button"
+              class="btn btn--primary"
+              id="btn-capture"
+              aria-keyshortcuts="c"
+            >
+              <span class="btn__led" aria-hidden="true"></span>
+              <span class="btn__icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
+                  <rect
+                    x="1.5"
+                    y="3.5"
+                    width="13"
+                    height="10"
+                    rx="1.5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.1"
+                  />
+                  <circle
+                    cx="8"
+                    cy="9"
+                    r="2.8"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.1"
+                  />
+                  <rect x="5" y="2" width="3" height="1.5" fill="currentColor" />
+                </svg>
+              </span>
+              <span class="btn__label" id="btn-capture-label">Capture screenshot</span>
+              <kbd class="kbd" aria-hidden="true">C</kbd>
+            </button>
+            <p class="hint">Shows the last saved version of this page.</p>
+          </section>
+
+          <!-- Preview block -->
+          <section class="block" aria-labelledby="preview-label">
+            <div class="section-label" id="preview-label">Preview</div>
+
+            <div class="preview" id="preview">
+              <!-- Idle empty state -->
+              <div class="preview__pane preview__pane--idle" data-pane="idle">
+                <div class="preview__center">
+                  <span class="preview__empty">Empty &middot; ready to capture</span>
+                </div>
+              </div>
+
+              <!-- Capturing -->
+              <div class="preview__pane preview__pane--capturing" data-pane="capturing">
+                <div class="preview__center">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span class="preview__muted">Capturing the current page&hellip;</span>
+                </div>
+                <div class="preview__pulse" aria-hidden="true"></div>
+              </div>
+
+              <!-- Ready -->
+              <div class="preview__pane preview__pane--ready" data-pane="ready">
+                <!-- Inline SVG placeholder (16:10) -->
+                <svg
+                  class="preview__img"
+                  viewBox="0 0 640 400"
+                  xmlns="http://www.w3.org/2000/svg"
+                  role="img"
+                  aria-label="Screenshot of hahn-solo/landing-spring-campaign, 1440 by 900 pixels"
+                >
+                  <defs>
+                    <linearGradient id="g-bg" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#1a1d24" />
+                      <stop offset="1" stop-color="#0a0c10" />
+                    </linearGradient>
+                    <pattern
+                      id="g-grid"
+                      x="0"
+                      y="0"
+                      width="40"
+                      height="40"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <path d="M40 0H0V40" fill="none" stroke="#1f232c" stroke-width="0.5" />
+                    </pattern>
+                  </defs>
+                  <rect width="640" height="400" fill="url(#g-bg)" />
+                  <rect width="640" height="400" fill="url(#g-grid)" />
+                  <!-- Faux page chrome -->
+                  <rect x="24" y="24" width="592" height="36" rx="3" fill="#14171d" />
+                  <circle cx="40" cy="42" r="4" fill="#2a2f38" />
+                  <circle cx="56" cy="42" r="4" fill="#2a2f38" />
+                  <circle cx="72" cy="42" r="4" fill="#2a2f38" />
+                  <rect x="96" y="36" width="200" height="12" rx="2" fill="#20242d" />
+                  <!-- Hero block -->
+                  <rect x="24" y="80" width="592" height="160" rx="4" fill="#13161c" />
+                  <rect x="48" y="112" width="260" height="18" rx="2" fill="#2a2f38" />
+                  <rect x="48" y="140" width="340" height="10" rx="2" fill="#20242d" />
+                  <rect x="48" y="158" width="300" height="10" rx="2" fill="#20242d" />
+                  <rect x="48" y="192" width="110" height="28" rx="3" fill="#F59E0B" opacity="0.85" />
+                  <!-- 3 cards -->
+                  <rect x="24" y="256" width="186" height="120" rx="4" fill="#13161c" />
+                  <rect x="227" y="256" width="186" height="120" rx="4" fill="#13161c" />
+                  <rect x="430" y="256" width="186" height="120" rx="4" fill="#13161c" />
+                  <rect x="44" y="276" width="90" height="10" rx="2" fill="#2a2f38" />
+                  <rect x="44" y="294" width="140" height="8" rx="2" fill="#20242d" />
+                  <rect x="44" y="308" width="120" height="8" rx="2" fill="#20242d" />
+                  <rect x="247" y="276" width="90" height="10" rx="2" fill="#2a2f38" />
+                  <rect x="247" y="294" width="140" height="8" rx="2" fill="#20242d" />
+                  <rect x="247" y="308" width="120" height="8" rx="2" fill="#20242d" />
+                  <rect x="450" y="276" width="90" height="10" rx="2" fill="#2a2f38" />
+                  <rect x="450" y="294" width="140" height="8" rx="2" fill="#20242d" />
+                  <rect x="450" y="308" width="120" height="8" rx="2" fill="#20242d" />
+                  <!-- Caption -->
+                  <text
+                    x="320"
+                    y="394"
+                    text-anchor="middle"
+                    font-family="JetBrains Mono, monospace"
+                    font-size="10"
+                    fill="#4b5260"
+                  >
+                    Page preview &middot; 1440 &times; 900
+                  </text>
+                </svg>
+              </div>
+
+              <!-- Error -->
+              <div class="preview__pane preview__pane--error" data-pane="error">
+                <div class="preview__center">
+                  <span class="pill">
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M8 1.5 L15 14 H1 Z"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.2"
+                        stroke-linejoin="round"
+                      />
+                      <line x1="8" y1="6" x2="8" y2="10" stroke="currentColor" stroke-width="1.3" />
+                      <circle cx="8" cy="11.8" r="0.8" fill="currentColor" />
+                    </svg>
+                    UPSTREAM
+                  </span>
+                  <p class="preview__error-msg">
+                    The screenshot service is temporarily unavailable. Please retry in a moment.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preview metadata row -->
+            <dl class="meta meta--preview" id="preview-meta">
+              <div class="meta__row" data-shown-in="idle">
+                <dt class="meta__key">&mdash;</dt>
+                <dd class="meta__val meta__val--muted">no capture yet</dd>
+              </div>
+              <div class="meta__row" data-shown-in="capturing">
+                <dt class="meta__key">elapsed</dt>
+                <dd class="meta__val meta__val--accent" id="elapsed">0.2 s</dd>
+              </div>
+              <div class="meta__row meta__row--group" data-shown-in="ready">
+                <div class="meta__row">
+                  <dt class="meta__key">file</dt>
+                  <dd class="meta__val meta__val--trunc">
+                    hahn-solo_landing-spring-campaign_20260422-0942.png
+                  </dd>
+                </div>
+                <div class="meta__row">
+                  <dt class="meta__key">size</dt>
+                  <dd class="meta__val">1440 &times; 900</dd>
+                </div>
+                <div class="meta__row">
+                  <dt class="meta__key">captured</dt>
+                  <dd class="meta__val">2026-04-22 09:42</dd>
+                </div>
+              </div>
+              <div class="meta__row" data-shown-in="error">
+                <dt class="meta__key">err</dt>
+                <dd class="meta__val meta__val--error">upstream_unavailable</dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Secondary actions -->
+          <section class="block block--actions">
+            <div class="actions" id="actions-secondary">
+              <button
+                type="button"
+                class="btn btn--secondary"
+                id="btn-copy"
+                aria-keyshortcuts="y"
+                disabled
+                aria-disabled="true"
+              >
+                <span class="btn__icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+                    <rect
+                      x="4"
+                      y="4"
+                      width="9"
+                      height="10"
+                      rx="1"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.1"
+                    />
+                    <path
+                      d="M3 11 V3 a1 1 0 0 1 1-1 h7"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.1"
+                    />
+                  </svg>
+                </span>
+                <span class="btn__label" id="btn-copy-label">Copy</span>
+                <kbd class="kbd" aria-hidden="true">Y</kbd>
+              </button>
+              <button
+                type="button"
+                class="btn btn--secondary"
+                id="btn-download"
+                aria-keyshortcuts="d"
+                disabled
+                aria-disabled="true"
+              >
+                <span class="btn__icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M8 2 V11 M4 7 L8 11 L12 7"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M2.5 13.5 H13.5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </span>
+                <span class="btn__label">Download</span>
+                <kbd class="kbd" aria-hidden="true">D</kbd>
+              </button>
+            </div>
+
+            <!-- Retry, only in error state -->
+            <button
+              type="button"
+              class="btn btn--primary btn--retry"
+              id="btn-retry"
+              aria-keyshortcuts="r"
+              hidden
+            >
+              <span class="btn__led" aria-hidden="true"></span>
+              <span class="btn__icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M13.5 8 a5.5 5.5 0 1 1 -1.9 -4.2"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M13.5 1.5 V4.5 H10.5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span class="btn__label">Retry</span>
+              <kbd class="kbd" aria-hidden="true">R</kbd>
+            </button>
+          </section>
+
+          <!-- Footer -->
+          <footer class="panel__footer">
+            <span class="foot-hint">Shift+? for help</span>
+          </footer>
+
+          <!-- Screen reader live regions -->
+          <div
+            class="sr-only"
+            aria-live="polite"
+            aria-atomic="true"
+            id="sr-status"
+            data-region="status"
+          ></div>
+          <div
+            class="sr-only"
+            aria-live="assertive"
+            aria-atomic="true"
+            id="sr-alert"
+            data-region="alert"
+          ></div>
+        </main>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
