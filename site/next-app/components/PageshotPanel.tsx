@@ -291,7 +291,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         }}
         className="p-6"
       >
-        <p className="text-sm text-stone-600">Loading page context&hellip;</p>
+        <p className="text-sm text-muted-foreground">Loading page context&hellip;</p>
       </main>
     );
   }
@@ -302,12 +302,12 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         panelRef.current = el;
       }}
       aria-label="PageShot capture panel"
-      className="flex min-h-full flex-col gap-5 bg-amber-50 p-5 font-sans text-stone-900 @container/panel"
+      className="flex min-h-full flex-col gap-5 bg-background p-5 font-sans text-foreground @container/panel"
     >
       <header className="flex items-center gap-2">
         <span
           data-testid="wordmark"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
         >
           PageShot
         </span>
@@ -316,7 +316,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       <section
         data-testid="status-line"
         aria-label="Panel status"
-        className="flex flex-col gap-1 text-stone-900"
+        className="flex flex-col gap-1 text-foreground"
       >
         <p
           data-testid="status-title"
@@ -326,7 +326,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         </p>
         <p
           data-testid="status-hint"
-          className="text-[13px] leading-[1.45] text-stone-600"
+          className="text-[13px] leading-[1.45] text-muted-foreground"
         >
           {STATUS_COPY[statusKey].hint}
         </p>
@@ -363,7 +363,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       {state.kind === 'idle' || state.kind === 'capturing' ? (
         <div
           data-testid="empty-preview"
-          className="rounded-2xl border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-600"
+          className="rounded-2xl border border-dashed border-border bg-muted/60 p-6 text-center text-sm text-muted-foreground"
         >
           {EMPTY_PREVIEW_COPY}
         </div>
@@ -461,7 +461,7 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
       data-testid={`capture-block-${capture.viewport}`}
       className="flex flex-col gap-3"
     >
-      <div className="flex items-center justify-between px-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">
+      <div className="flex items-center justify-between px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         <span>{VIEWPORT_LABELS[capture.viewport]}</span>
         <button
           type="button"
@@ -475,10 +475,10 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
           data-testid={`expand-toggle-${capture.viewport}`}
           className={[
             'flex items-center gap-1 rounded-full px-2 py-0.5 font-medium normal-case tracking-normal transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:ring-offset-amber-50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
             expanded
-              ? 'bg-amber-400 text-stone-900'
-              : 'text-stone-600 hover:bg-amber-50',
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >
           {expanded ? (
