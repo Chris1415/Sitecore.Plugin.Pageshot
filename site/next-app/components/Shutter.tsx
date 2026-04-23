@@ -97,6 +97,11 @@ export function Shutter(props: ShutterProps) {
   const label = isCapturing ? 'Capturing screenshot' : 'Capture screenshot';
 
   return (
+    // Outer wrapper is 144 px (h-36 w-36) — intentionally larger than the
+    // 112 px button (h-28 w-28) to leave headroom for the capture-bloom
+    // radial-gradient to reach beyond the button's edge without clipping.
+    // Spec calls for a 112 px "hero" button; that is the button's own size,
+    // not the wrapper.
     <div className="relative flex h-36 w-36 items-center justify-center">
       {/* Bloom overlay — absolutely positioned sibling of the button.
           Under reduced-motion we render no animation class; the div stays

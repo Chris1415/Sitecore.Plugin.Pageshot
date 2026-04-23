@@ -7,6 +7,12 @@ import nextConfig from './next.config.mjs';
  * Guards the Section 4c-1 rule that HTTP localhost must be portal-iframe reachable
  * (Chrome PNA) and the task breakdown T003 "do NOT combine Allow-Origin: * with
  * Allow-Credentials: true" constraint.
+ *
+ * FILE LOCATION: co-located at project root next to `next.config.mjs` — the
+ * single file it tests. Vitest picks it up via the default `*.test.ts` glob.
+ * Moving it into a `tests/` folder would separate the assertion from its
+ * subject and add a relative-path import. Keeping it here is canonical
+ * co-location, not a misplaced test.
  */
 describe('next.config.mjs — PNA headers (T003-TEST-1)', () => {
   it('exposes a headers() function that covers every path', async () => {

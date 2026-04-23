@@ -152,18 +152,32 @@ export const MarketplaceProvider: React.FC<ClientSDKProviderProps> = ({
   }, [client]);
 
   if (loading) {
-    return <div>Attempting to connect to Sitecore Marketplace...</div>;
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-dvh items-center justify-center bg-background p-6 text-sm text-muted-foreground"
+      >
+        Connecting to Sitecore Marketplace&hellip;
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div>
-        <h1>Error initializing Marketplace SDK</h1>
-        <div>{error}</div>
-        <div>
-          Please check if the client SDK is loaded inside Sitecore Marketplace
-          parent window and you have properly set your app&apos;s extension points.
-        </div>
+      <div
+        role="alert"
+        className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background p-6 text-center"
+      >
+        <h1 className="text-lg font-semibold text-danger-fg">
+          Error initializing Marketplace SDK
+        </h1>
+        <p className="max-w-prose text-sm text-foreground">{error}</p>
+        <p className="max-w-prose text-xs text-muted-foreground">
+          Please check that the SDK is loaded inside a Sitecore Marketplace
+          parent window and that the app&apos;s extension points are properly
+          configured.
+        </p>
       </div>
     );
   }

@@ -138,10 +138,17 @@ async function fetchFreshToken(): Promise<string> {
  * parse failure; callers must treat the return value as best-effort metadata.
  */
 function decodeTenantIdFromJwt(jwt: string): string | null {
+  // Defence-in-depth cap on payload size before decoding (Mn5). A well-formed
+  // Sitecore access-token payload is ~500 bytes; 4 KB leaves ample headroom
+  // and bounds CPU cost if the auth endpoint is ever compromised and returns
+  // a gigantic crafted payload. base64url is 4/3 the size of its bytes, so
+  // 4 KB payload → ~5.5 KB base64. Cap the segment at 8 KB to be safe.
+  const MAX_PAYLOAD_B64 = 8192;
   try {
     const parts = jwt.split('.');
     if (parts.length < 2) return null;
     const payloadSegment = parts[1]!;
+    if (payloadSegment.length > MAX_PAYLOAD_B64) return null;
     // base64url → base64
     const b64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
     const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);

@@ -28,7 +28,7 @@ function pad2(n: number): string {
 }
 
 /** Apply § 4c-4 steps 1–3 to a single slug (site or page). */
-function slugify(input: string): string {
+function slugify(input: string, fallback: string): string {
   const lower = input.toLowerCase();
   // Replace any run of chars that are NOT in [a-z0-9_-] with a single `-`.
   const replaced = lower.replace(/[^a-z0-9_-]+/g, '-');
@@ -36,9 +36,12 @@ function slugify(input: string): string {
   const collapsed = replaced.replace(/-{2,}/g, '-');
   // Trim leading/trailing `-`.
   const trimmed = collapsed.replace(/^-+|-+$/g, '');
-  // Fallback: if the slug is now empty, use a single placeholder char so the
-  // filename still has the two `_`-separated segments § 4c-4 promises.
-  return trimmed || '-';
+  // Fallback: if the slug is now empty OR contains only dashes (e.g. input
+  // was all emoji / all punctuation), use a meaningful placeholder so the
+  // filename reads cleanly (Mn2 fix — previous behavior produced
+  // `acme_-_20260423-0830.png` for non-alphanumeric pageName).
+  if (!trimmed || /^-+$/.test(trimmed)) return fallback;
+  return trimmed;
 }
 
 /** Format a local `Date` as `YYYYMMDD-HHmm` per AC-3.4. */
@@ -60,8 +63,8 @@ export function buildScreenshotFilename(
 ): string {
   const timestamp = formatLocalTimestamp(capturedAt);
 
-  let siteSlug = slugify(siteName);
-  let pageSlug = slugify(pageName);
+  let siteSlug = slugify(siteName, 'site');
+  let pageSlug = slugify(pageName, 'page');
 
   // Start with the naive assembly.
   let candidate = `${siteSlug}_${pageSlug}_${timestamp}.png`;
@@ -95,8 +98,8 @@ export function buildScreenshotFilename(
   pageSlug = pageSlug.slice(0, pageShare);
 
   // Re-trim trailing `-` that the slice might have produced.
-  siteSlug = siteSlug.replace(/-+$/g, '') || siteSlug.charAt(0) || '-';
-  pageSlug = pageSlug.replace(/-+$/g, '') || pageSlug.charAt(0) || '-';
+  siteSlug = siteSlug.replace(/-+$/g, '') || siteSlug.charAt(0) || 's';
+  pageSlug = pageSlug.replace(/-+$/g, '') || pageSlug.charAt(0) || 'p';
 
   candidate = `${siteSlug}_${pageSlug}_${timestamp}.png`;
   return candidate;
