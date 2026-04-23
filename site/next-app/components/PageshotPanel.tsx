@@ -210,8 +210,14 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
     const doFetch = fetchImpl ?? globalThis.fetch;
 
+    // Narrow try/catch around the fetch only — a fetch rejection is the one
+    // legitimate "network" failure mode we want to map to the network envelope.
+    // Downstream transforms (trimBottomPadding, dispatch) are considered
+    // bug-free; if they throw we surface the exception rather than
+    // misclassifying a programming error as "you're offline".
+    let results: Array<{ viewport: Viewport; body: ScreenshotEnvelope }>;
     try {
-      const results = await Promise.all(
+      results = await Promise.all(
         selected.map(async (viewport) => {
           const response = await doFetch(
             `/api/screenshot/${encodeURIComponent(pageId)}?viewport=${viewport}&height=${height}`,
@@ -220,46 +226,54 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
           return { viewport, body };
         }),
       );
-
-      const firstFailure = results.find((r) => r.body.ok === false);
-      if (firstFailure && firstFailure.body.ok === false) {
-        dispatch({
-          type: 'failed',
-          code: firstFailure.body.error.code,
-          message: firstFailure.body.error.message,
-        });
-        return;
-      }
-
-      const capturedAt = new Date();
-      // Auto-trim trailing whitespace/background padding. The Agent API
-      // returns an image of exactly the requested height, so shorter pages
-      // come back with solid-color padding at the bottom. `trimBottomPadding`
-      // detects that and crops it out. Failure modes (no canvas, no padding
-      // detected, too-aggressive trim) return the original bytes unchanged.
-      const trimmedBodies = await Promise.all(
-        results.map(async (r) => {
-          if (r.body.ok !== true) throw new Error('unreachable');
-          const imageBase64 = await trimBottomPadding(r.body.image);
-          return { viewport: r.viewport, imageBase64 };
-        }),
-      );
-      const captures: Capture[] = trimmedBodies.map((r) => ({
-        viewport: r.viewport,
-        imageBase64: r.imageBase64,
-        siteName,
-        pageName,
-        capturedAt,
-      }));
-
-      dispatch({ type: 'resolved', captures });
     } catch {
       dispatch({
         type: 'failed',
         code: 'network',
         message: 'Check your connection, then try again.',
       });
+      return;
     }
+
+    const firstFailure = results.find((r) => r.body.ok === false);
+    if (firstFailure && firstFailure.body.ok === false) {
+      dispatch({
+        type: 'failed',
+        code: firstFailure.body.error.code,
+        message: firstFailure.body.error.message,
+      });
+      return;
+    }
+
+    const capturedAt = new Date();
+    // Auto-trim trailing whitespace/background padding. The Agent API
+    // returns an image of exactly the requested height, so shorter pages
+    // come back with solid-color padding at the bottom. `trimBottomPadding`
+    // detects that and crops it out. Failure modes (no canvas, no padding
+    // detected, too-aggressive trim) return the original bytes unchanged —
+    // by contract this never throws.
+    const trimmedBodies = await Promise.all(
+      results.map(async (r) => {
+        // `firstFailure` above guarantees every body here is `ok: true`. We
+        // assert this via the type guard so TypeScript narrows `r.body.image`.
+        if (r.body.ok !== true) {
+          // Should never happen — the firstFailure short-circuit returned
+          // before we got here. Surface loudly rather than silently.
+          throw new Error('pageshot: expected ok:true envelope after failure short-circuit');
+        }
+        const imageBase64 = await trimBottomPadding(r.body.image);
+        return { viewport: r.viewport, imageBase64 };
+      }),
+    );
+    const captures: Capture[] = trimmedBodies.map((r) => ({
+      viewport: r.viewport,
+      imageBase64: r.imageBase64,
+      siteName,
+      pageName,
+      capturedAt,
+    }));
+
+    dispatch({ type: 'resolved', captures });
   }, [dispatch, fetchImpl, height, pages, viewports]);
 
   const handleRetryPress = useCallback(() => {
