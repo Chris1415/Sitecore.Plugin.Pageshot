@@ -2,6 +2,8 @@
 
 A Sitecore Marketplace custom app that adds a one-button "capture screenshot" control to the SitecoreAI Pages editor.
 
+![PageShot panel docked in the SitecoreAI Pages editor, showing Mobile and Desktop captures of the solo-website Home page](./docs/assets/pageshot-panel-in-pages-editor.png)
+
 ## What it does
 
 Content editors working in SitecoreAI Pages often need to share the page they're working on with colleagues — in Slack, Teams, email, or a review thread. PageShot adds a Page Builder Context Panel inside the Pages editor with a single action: click Capture, get a clean chrome-free screenshot of the current page, then Copy it to clipboard, Download it as PNG, or Open it in a new tab. The image comes from the SitecoreAI Agent API's `/screenshot` endpoint, rendered server-side without the editor chrome that an OS screenshot tool would capture.
