@@ -1,34 +1,28 @@
-"use client";
+import Link from "next/link";
 
-import { ApplicationContext } from "@/components/examples/built-in-auth/application-context";
-import { ListLanguagesFromClientSdk } from "@/components/examples/built-in-auth/with-xmc/list-languages";
-import { Separator } from "@/components/ui/separator";
-
-function Examples() {
+/**
+ * PageShot landing route — the Marketplace custom-app surface is at `/panel`.
+ * This page exists only so a bare navigation to the app root (e.g. during a
+ * deploy smoke test) shows a short pointer instead of a 404.
+ *
+ * The Next scaffold shipped a Marketplace SDK demo tree here (Application
+ * Context + ListLanguagesFromClientSdk with XMC). PageShot does not use that
+ * demo — it was removed to (a) avoid shipping demo `console.log`s into
+ * production, (b) shrink the panel bundle by dropping Collapsible + Badge +
+ * XMC query plumbing the panel itself does not need.
+ */
+export default function PageshotIndex() {
   return (
-    <div className="container mx-auto p-6 space-y-8 max-w-3xl">
-      <div className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Marketplace SDK Demo
-        </h1>
-        <p className="text-muted-foreground">
-          Marketplace SDK with custom authentication and XMC client-side
-          examples
-        </p>
-      </div>
-
-      <ApplicationContext />
-
-      <Separator />
-
-      <div className="space-y-6">
-        <h2 className="text-2xl font-semibold">Built-in Auth Examples</h2>
-        <div className="grid gap-6">
-          <ListLanguagesFromClientSdk />
-        </div>
-      </div>
-    </div>
+    <main className="mx-auto max-w-xl p-8 text-sm leading-relaxed">
+      <h1 className="text-lg font-semibold tracking-tight">PageShot</h1>
+      <p className="mt-2 text-muted-foreground">
+        The capture panel lives at{" "}
+        <Link href="/panel" className="underline underline-offset-2">
+          /panel
+        </Link>
+        . It is designed to be embedded inside a Sitecore Pages Marketplace
+        iframe, so this root URL is rarely visited directly.
+      </p>
+    </main>
   );
 }
-
-export default Examples;
