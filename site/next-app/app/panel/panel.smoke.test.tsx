@@ -4,43 +4,40 @@ import { resolve } from 'node:path';
 import { render } from '@testing-library/react';
 
 /**
- * T004-TEST-1 — Shutterbug Tailwind tokens compile.
+ * T004-TEST-1 — PageShot Tailwind tokens compile (Blok redesign).
+ *
+ * Originally this test pinned the five Shutterbug tokens the panel depended
+ * on. The Blok redesign removed the two Shutterbug-specific shadow tokens
+ * (shutter + polaroid are now covered by Blok's shadow scale); the three
+ * motion tokens remain because they animate shutter press, capture bloom,
+ * and the denied-pill shake — Blok does not ship equivalents.
  *
  * jsdom does not apply stylesheet rules against markup the way a real browser
- * does, so asserting the exact `getComputedStyle(el).boxShadow` after mounting
- * a component is unreliable — it will return '' regardless of whether the
- * Tailwind utility resolves. We take two complementary checks instead:
+ * does, so asserting `getComputedStyle(el).boxShadow` is unreliable. We take
+ * two complementary checks:
  *
- *   1. Render a component that uses the Shutterbug utility classes. We assert
- *      that React mounts without throwing and that every expected class lands
- *      on the rendered element — React throwing is what a "missing class"
- *      would look like at runtime (it would not — invalid Tailwind classes are
- *      silent in production — but we still want the render to succeed as a
- *      base sanity check).
- *   2. Read `app/globals.css` at test time and assert that every token the UI
- *      layer relies on is declared in the `@theme inline` block. Tailwind v4
- *      resolves `shadow-<name>` and `animate-<name>` utilities against the
- *      `--shadow-<name>` and `--animate-<name>` tokens, so if they are listed
- *      in the stylesheet, the utilities will be generated at build time. This
- *      is the compile-check contract T004-TEST-1 asks for.
+ *   1. Render a component that uses the remaining motion utility classes.
+ *      We assert that React mounts without throwing and that every expected
+ *      class lands on the rendered element.
+ *   2. Read `app/globals.css` at test time and assert that every motion
+ *      token the UI layer relies on is declared in the `@theme inline`
+ *      block. Tailwind v4 resolves `animate-<name>` utilities against the
+ *      `--animate-<name>` tokens, so if they are listed in the stylesheet,
+ *      the utilities will be generated at build time.
  */
 
 const GLOBALS_CSS = readFileSync(resolve(__dirname, '..', 'globals.css'), 'utf8');
 
 const UTILITIES = [
-  'shadow-shutter',
-  'shadow-polaroid',
   'animate-shutter-bloom',
   'animate-shutter-press',
   'animate-shake',
 ];
 
-describe('Shutterbug Tailwind tokens (T004-TEST-1)', () => {
-  it('renders a component that references every Shutterbug utility', () => {
+describe('PageShot Tailwind tokens (T004-TEST-1, Blok redesign)', () => {
+  it('renders a component that references every motion utility the panel still uses', () => {
     const { container } = render(
       <div data-testid="tokens">
-        <div className="shadow-shutter">shutter</div>
-        <div className="shadow-polaroid">polaroid</div>
         <div className="animate-shutter-bloom">bloom</div>
         <div className="animate-shutter-press">press</div>
         <div className="animate-shake">shake</div>
@@ -54,11 +51,6 @@ describe('Shutterbug Tailwind tokens (T004-TEST-1)', () => {
     }
   });
 
-  it('defines --shadow-shutter and --shadow-polaroid in @theme inline', () => {
-    expect(GLOBALS_CSS).toMatch(/--shadow-shutter:\s*0 10px 30px -8px rgb\(245 158 11 \/ 0\.35\)/);
-    expect(GLOBALS_CSS).toMatch(/--shadow-polaroid:\s*0 20px 40px -12px rgb\(120 53 15 \/ 0\.22\)/);
-  });
-
   it('defines --animate-shutter-bloom, --animate-shutter-press, --animate-shake in @theme inline', () => {
     expect(GLOBALS_CSS).toMatch(/--animate-shutter-bloom:\s*bloom 200ms ease-out/);
     expect(GLOBALS_CSS).toMatch(/--animate-shutter-press:\s*shutter-press 380ms/);
@@ -69,5 +61,24 @@ describe('Shutterbug Tailwind tokens (T004-TEST-1)', () => {
     expect(GLOBALS_CSS).toMatch(/@keyframes shake\b/);
     expect(GLOBALS_CSS).toMatch(/@keyframes bloom\b/);
     expect(GLOBALS_CSS).toMatch(/@keyframes shutter-press\b/);
+  });
+
+  it('no longer defines the Shutterbug-specific --shadow-shutter / --shadow-polaroid declarations', () => {
+    // The Blok redesign dropped these declarations from globals.css; this
+    // assertion guards against accidental re-introduction by a future token
+    // sweep. The regex matches a CSS custom-property declaration
+    // (`--shadow-shutter:`) rather than a prose mention in a comment.
+    expect(GLOBALS_CSS).not.toMatch(/--shadow-shutter\s*:/);
+    expect(GLOBALS_CSS).not.toMatch(/--shadow-polaroid\s*:/);
+  });
+
+  it('declares the Blok semantic surface tokens the panel relies on', () => {
+    // Panel surfaces (bg-background, text-foreground, bg-card, bg-muted,
+    // bg-primary, text-muted-foreground, text-primary-foreground, border-
+    // border) come from these theme variables. This assertion verifies the
+    // registry theme is installed — not a specific value.
+    expect(GLOBALS_CSS).toMatch(/--color-background:\s*var\(--background\)/);
+    expect(GLOBALS_CSS).toMatch(/--color-primary:\s*var\(--primary\)/);
+    expect(GLOBALS_CSS).toMatch(/--color-muted:\s*var\(--muted\)/);
   });
 });

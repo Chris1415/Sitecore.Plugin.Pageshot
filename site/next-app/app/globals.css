@@ -481,15 +481,13 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 
     /* ────────────────────────────────────────────────────────────────────
-       PageShot — Shutterbug design tokens (T004)
-       See task-breakdown-20260422T073037Z.md § 4c-3 / § 4c-4.
-       Tailwind's default amber/stone/rose palettes are used unchanged, so
-       no --color-* additions are needed here — only shadows + animation.
+       PageShot — motion tokens (Blok redesign)
+       The former Shutterbug shadow tokens (--shadow-shutter, --shadow-
+       polaroid, --shadow-shutter-hover) are gone — Blok's shadow scale
+       covers the remaining surfaces. Motion tokens stay because Blok
+       does not ship equivalents for the shutter press-spring + bloom
+       and the denied-pill shake one-shot.
        ──────────────────────────────────────────────────────────────────── */
-
-    --shadow-shutter: 0 10px 30px -8px rgb(245 158 11 / 0.35);
-    --shadow-shutter-hover: 0 14px 36px -8px rgb(245 158 11 / 0.55);
-    --shadow-polaroid: 0 20px 40px -12px rgb(120 53 15 / 0.22), 0 2px 6px -2px rgb(120 53 15 / 0.08);
 
     --animate-shutter-bloom: bloom 200ms ease-out;
     --animate-shutter-press: shutter-press 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
