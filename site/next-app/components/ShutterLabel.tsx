@@ -1,27 +1,16 @@
 'use client';
 
 /**
- * T015 — `<ShutterLabel>` + sub-line elapsed counter.
+ * T015 — `<ShutterLabel>` + sub-line elapsed counter — Blok redesign pass.
  *
- * Non-code-style scaffolding per § 9.3 — the label is composition only; its
- * behavior is covered by the T014b + T016b suites (the Shutter parent changes
- * label text on state transitions; the elapsed-time controller drives the
- * `capturing-slow` sub-line visibility).
- *
- * Props (per § 4 T015):
- *   - `state`            — mirrors `<Shutter>`'s state union.
- *   - `elapsedSeconds?`  — integer seconds to display once the sub-line is
- *                          visible (state `capturing-slow`). Ignored for other
- *                          states.
+ * Text-only composition. Colours migrate from the Shutterbug stone/amber
+ * palette to Blok semantic tokens (`text-foreground` main, `text-primary-fg`
+ * elapsed counter) so the label flips under dark mode with the rest of the
+ * theme.
  *
  * Copy (verbatim from § 4c-4):
  *   - Main label: "Capture" in idle / disabled, "Capturing…" in capturing states.
- *   - Sub-line (capturing-slow only): "Still catching… {n} s" in Geist Mono,
- *     amber-700.
- *
- * Sizing: Geist Sans 500 / 13 px main label (14 px under the `md` container
- * query — implemented via Tailwind's `@container` modifier once layout wires
- * it in T019; Phase 1 keeps the base 13 px).
+ *   - Sub-line (capturing-slow only): "Still catching… {n} s" in Geist Mono.
  */
 
 import { cn } from '@/lib/utils';
@@ -49,10 +38,7 @@ export function ShutterLabel({ state, elapsedSeconds }: ShutterLabelProps) {
       <span
         data-testid="shutter-label-main"
         className={cn(
-          'font-sans text-[13px] font-medium text-stone-900',
-          // The `md` container query lifts this to 14 px once the panel is
-          // assembled (T019); kept out of Phase 1 to avoid reshaping the token
-          // surface.
+          'font-sans text-[13px] font-medium text-foreground',
         )}
       >
         {mainLabel(state)}
@@ -60,7 +46,7 @@ export function ShutterLabel({ state, elapsedSeconds }: ShutterLabelProps) {
       {showSub ? (
         <span
           data-testid="shutter-label-sub"
-          className="font-mono text-[11px] text-amber-700"
+          className="font-mono text-[11px] text-primary-fg"
           role="text"
         >
           {subText}
