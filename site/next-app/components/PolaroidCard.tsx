@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * T017b — `<PolaroidCard>` ready + error variants.
+ * T017b — `<PolaroidCard>` ready + error variants — Blok redesign pass.
  *
- * Visual source of truth: `products/pageshot/pocs/poc-v2/index.html`
- * `.polaroid` / `.polaroid-slot` / `.polaroid-ledge` blocks. Copy source of
- * truth: § 4c-4 of the task breakdown ("Polaroid preview card",
- * "Error card", "Error-card per-code copy", "Error icon mapping").
+ * Replaces the Shutterbug amber-shadowed polaroid frame with a Blok
+ * `<Card>`-shaped surface: neutral background, subtle border, Blok semantic
+ * tokens for text + icons. The "polaroid" idiom is preserved — an image slot
+ * with a narrow "ledge" footer below — but the visual language is neutral
+ * and dark-mode-friendly.
  *
- * Props — discriminated union per § 4 T017b:
- *   - `{ kind: 'ready';  imageBase64; siteName; pageName; capturedAt }`
- *   - `{ kind: 'error';  code }`  // copy is looked up from ERROR_CATALOGUE below
+ * Copy source of truth: § 4c-4 ("Error card", "Error-card per-code copy",
+ * "Error icon mapping"). Functional behaviour (discriminated union props,
+ * alt-text contract, reduced-motion arrival, image slot scrolling, ledge
+ * format, data-testid attributes) is unchanged.
  *
- * Accessibility (§ 4c-4 + § 4 T017b):
+ * Accessibility:
  *   - `<img alt="Screenshot of page {pageName} on {siteName}, captured {capturedAt}">`
- *   - Error title is `text-rose-600` (5.7:1 contrast per spec § 4.5), NOT -500.
- *   - Reduced motion collapses the slide-up entrance to opacity-only.
+ *   - Error title uses `text-danger-fg` (Blok destructive foreground token)
+ *     which meets WCAG 2.1 AA contrast for small text; historical contract
+ *     was specifically `text-rose-600`. Switching to the token makes the
+ *     surface dark-mode-aware.
+ *   - Reduced motion collapses the slide-up to opacity only.
  */
 
 import { AlertCircle, WifiOff } from 'lucide-react';
@@ -25,12 +30,6 @@ import { cn } from '@/lib/utils';
 
 import type { PanelErrorCode } from './use-panel-state';
 
-/**
- * § 4c-4 copy + icon catalogue for the error card. Kept inline (not a separate
- * constants file) because this is the only consumer in Phase 2. If
- * `<InlineMessage>` or the announcement catalogue (T023) later share the copy
- * it can be lifted.
- */
 type ErrorIconKind = 'alert-circle' | 'wifi-off';
 
 interface ErrorEntry {
@@ -77,11 +76,6 @@ export type PolaroidCardProps =
       siteName: string;
       pageName: string;
       capturedAt: Date;
-      /**
-       * When `true`, the image slot has no height cap — the polaroid grows
-       * to fit the full screenshot inline. When `false` (default), the
-       * slot is capped at 420 px and scrolls internally for tall pages.
-       */
       expanded?: boolean;
     }
   | {
@@ -89,10 +83,6 @@ export type PolaroidCardProps =
       code: PanelErrorCode;
     };
 
-/**
- * Read `prefers-reduced-motion: reduce`. Same pattern as `<Shutter>`.
- * Lazy-initialised from `matchMedia`; re-subscribes on mount. SSR-safe.
- */
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState<boolean>(() => {
     if (typeof window === 'undefined' || !window.matchMedia) {
@@ -125,7 +115,7 @@ function ErrorIcon({ kind }: { kind: ErrorIconKind }) {
     return (
       <span
         data-testid="polaroid-error-icon-wifi-off"
-        className="flex h-8 w-8 items-center justify-center text-rose-500"
+        className="flex h-8 w-8 items-center justify-center text-danger-500"
         aria-hidden="true"
       >
         <WifiOff className="h-8 w-8" strokeWidth={1.5} />
@@ -135,7 +125,7 @@ function ErrorIcon({ kind }: { kind: ErrorIconKind }) {
   return (
     <span
       data-testid="polaroid-error-icon-alert-circle"
-      className="flex h-8 w-8 items-center justify-center text-rose-500"
+      className="flex h-8 w-8 items-center justify-center text-danger-500"
       aria-hidden="true"
     >
       <AlertCircle className="h-8 w-8" strokeWidth={1.5} />
@@ -147,12 +137,10 @@ export function PolaroidCard(props: PolaroidCardProps) {
   const reducedMotion = usePrefersReducedMotion();
 
   // Arrival motion — same frame for both variants. Reduced-motion drops the
-  // translate and keeps opacity only (per § 4c-4). The `translate-y-0` state
-  // is what the card rests at; we always include it here so the class is
-  // stable across tests. The `translate-y-2` entrance utility is only added
-  // when motion is allowed.
+  // translate and keeps opacity only (per § 4c-4). Shadow + border use Blok
+  // tokens so the card follows the theme (light / dark) automatically.
   const rootClassName = cn(
-    'rounded-3xl border border-stone-200/60 bg-white p-2 shadow-polaroid',
+    'rounded-3xl border border-border bg-card p-2 shadow-sm',
     '@container/polaroid transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.2,0.9,0.2,1)]',
     'opacity-100',
     !reducedMotion && 'translate-y-0',
@@ -161,12 +149,9 @@ export function PolaroidCard(props: PolaroidCardProps) {
   if (props.kind === 'ready') {
     const { imageBase64, siteName, pageName, capturedAt, expanded = false } = props;
     const altText = `Screenshot of page ${pageName} on ${siteName}, captured ${capturedAt.toLocaleString()}`;
-    // Compact (default): 420 px cap + scrollable for tall pages.
-    // Expanded: no cap, polaroid grows to the image's natural height.
-    // In both states Copy + Download ship the same full-resolution PNG.
     const imageSlotClass = expanded
-      ? 'overflow-hidden rounded-2xl bg-stone-100'
-      : 'max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl bg-stone-100';
+      ? 'overflow-hidden rounded-2xl bg-muted'
+      : 'max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl bg-muted';
     return (
       <div data-testid="polaroid-root" className={rootClassName}>
         <div data-testid="polaroid-image-slot" className={imageSlotClass}>
@@ -180,8 +165,8 @@ export function PolaroidCard(props: PolaroidCardProps) {
         <div
           data-testid="polaroid-ledge"
           className={cn(
-            'mt-1 flex items-center justify-between gap-2 border-t border-stone-200/60',
-            'px-3 py-2 font-mono text-[11px] text-stone-600',
+            'mt-1 flex items-center justify-between gap-2 border-t border-border',
+            'px-3 py-2 font-mono text-[11px] text-muted-foreground',
           )}
         >
           <span
@@ -197,26 +182,27 @@ export function PolaroidCard(props: PolaroidCardProps) {
     );
   }
 
-  // Error variant — same frame, rose-600 title, AlertCircle/WifiOff icon.
+  // Error variant — same frame, danger-foreground title, AlertCircle/WifiOff
+  // icon from the catalogue.
   const entry = ERROR_CATALOGUE[props.code];
   return (
     <div data-testid="polaroid-root" className={rootClassName}>
       <div
         className={cn(
           'flex aspect-[4/3] flex-col items-center justify-center gap-2',
-          'overflow-hidden rounded-2xl bg-stone-50 px-4 text-center',
+          'overflow-hidden rounded-2xl bg-muted px-4 text-center',
         )}
       >
         <ErrorIcon kind={entry.icon} />
         <p
           data-testid="polaroid-error-title"
-          className="text-sm font-medium text-rose-600"
+          className="text-sm font-medium text-danger-fg"
         >
           {entry.title}
         </p>
         <p
           data-testid="polaroid-error-subtitle"
-          className="max-w-[28ch] text-xs text-stone-600"
+          className="max-w-[28ch] text-xs text-muted-foreground"
         >
           {entry.subtitle}
         </p>
@@ -224,8 +210,8 @@ export function PolaroidCard(props: PolaroidCardProps) {
       <div
         data-testid="polaroid-ledge"
         className={cn(
-          'mt-1 flex items-center justify-center border-t border-stone-200/60',
-          'px-3 py-2 text-[11px] italic text-stone-500 text-center',
+          'mt-1 flex items-center justify-center border-t border-border',
+          'px-3 py-2 text-[11px] italic text-muted-foreground text-center',
         )}
       >
         {LAST_SAVED_HINT}

@@ -133,11 +133,16 @@ describe('T017a-TEST-3 — Error variant renders per-code title + subtitle (tabl
     ({ code, title, subtitle, iconTestId }) => {
       const { unmount } = render(<PolaroidCard kind="error" code={code} />);
 
-      // Title text must match exactly, and carry text-rose-600 (not -500).
+      // Title text must match exactly. After the Blok redesign, the error
+      // title uses the `text-danger-fg` semantic token (Blok
+      // destructive-foreground). This token meets WCAG 2.1 AA contrast by
+      // construction (handled at the theme level) and flips correctly under
+      // dark mode. The historical raw-rose utilities (`text-rose-500` /
+      // `text-rose-600`) should no longer appear on the title node.
       const titleEl = screen.getByTestId('polaroid-error-title');
       expect(titleEl.textContent).toBe(title);
-      expect(titleEl.className).toMatch(/text-rose-600/);
-      expect(titleEl.className).not.toMatch(/text-rose-500(\s|$)/);
+      expect(titleEl.className).toMatch(/text-(danger|destructive)/);
+      expect(titleEl.className).not.toMatch(/text-rose-/);
 
       const subtitleEl = screen.getByTestId('polaroid-error-subtitle');
       expect(subtitleEl.textContent).toBe(subtitle);
