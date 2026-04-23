@@ -24,13 +24,13 @@
  * public API is stable across the redesign.
  */
 
-import { Check, Copy, Download, RefreshCw } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export type ActionPillVariant = 'copy' | 'download' | 'retry';
+export type ActionPillVariant = 'copy' | 'download' | 'open' | 'retry';
 export type ActionPillState = 'idle' | 'success' | 'disabled' | 'denied';
 
 export interface ActionPillProps {
@@ -62,6 +62,16 @@ const VARIANTS: Record<ActionPillVariant, VariantConfig> = {
     successRevertMs: 1400,
     IconIdle: Download,
     iconTestId: 'action-pill-icon-download',
+  },
+  open: {
+    // Workaround pill for sandbox-blocked downloads. Window.open in a new
+    // tab where the browser handles the PNG (inline preview → right-click
+    // save). Retired when Sitecore adds `allow-downloads` to the iframe.
+    idleLabel: 'Open',
+    successLabel: 'Opened',
+    successRevertMs: 1400,
+    IconIdle: ExternalLink,
+    iconTestId: 'action-pill-icon-open',
   },
   retry: {
     // Retry does not have a success window in v1 — a successful retry
@@ -155,7 +165,7 @@ export function ActionPill(props: ActionPillProps) {
         // Flex sizing hints — Copy is `flex-none min-w-24`, Download/Retry
         // are `flex-1` per § 4c-4.
         variant === 'copy' && 'min-w-24 flex-none',
-        (variant === 'download' || variant === 'retry') && 'flex-1',
+        (variant === 'download' || variant === 'open' || variant === 'retry') && 'flex-1',
         // Denied: one-shot shake keyframe then lock to disabled.
         state === 'denied' && 'animate-shake',
       )}

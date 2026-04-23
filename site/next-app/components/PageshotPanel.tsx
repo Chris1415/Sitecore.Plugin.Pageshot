@@ -32,6 +32,7 @@ import { Shutter, type ShutterState } from './Shutter';
 import { ShutterLabel } from './ShutterLabel';
 import { useCopyImage } from './use-copy-image';
 import { useDownloadImage } from './use-download-image';
+import { useOpenImage } from './use-open-image';
 import { useElapsedTime } from './use-elapsed';
 import {
   usePanelState,
@@ -428,6 +429,8 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
     capturedAt: capture.capturedAt,
   });
 
+  const { open: openImage } = useOpenImage(capture.imageBase64);
+
   const prevCopyStatusRef = useRef<typeof copyStatus>(copyStatus);
   useEffect(() => {
     const prev = prevCopyStatusRef.current;
@@ -445,6 +448,10 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
     announce(ANNOUNCEMENTS.downloadStarted);
     await downloadImage();
   }, [announce, downloadImage]);
+
+  const handleOpenPress = useCallback(() => {
+    openImage();
+  }, [openImage]);
 
   const copyPillState = (() => {
     if (copyStatus === 'copied') return 'success';
@@ -499,7 +506,7 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
       />
       <div
         data-testid={`action-bar-${capture.viewport}`}
-        className="flex flex-row gap-2"
+        className="flex flex-row flex-wrap gap-2"
       >
         <ActionPillWithButtonRef
           buttonRef={copyRef}
@@ -511,6 +518,11 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
           variant="download"
           state="idle"
           onPress={handleDownloadPress}
+        />
+        <ActionPillWithButtonRef
+          variant="open"
+          state="idle"
+          onPress={handleOpenPress}
         />
       </div>
       <InlineMessage visible={clipboardDenied} tone="warn">
@@ -552,7 +564,7 @@ function ShutterWithButtonRef(props: ShutterWithButtonRefProps) {
 
 interface ActionPillWithButtonRefProps {
   buttonRef?: React.MutableRefObject<HTMLButtonElement | null>;
-  variant: 'copy' | 'download' | 'retry';
+  variant: 'copy' | 'download' | 'open' | 'retry';
   state: 'idle' | 'success' | 'disabled' | 'denied';
   onPress: () => void;
 }
