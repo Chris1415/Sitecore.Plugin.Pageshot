@@ -594,7 +594,13 @@ function ActionPillWithButtonRef(props: ActionPillWithButtonRefProps) {
       ref={(el) => {
         wrapRef.current = el;
       }}
-      className={variant === 'copy' ? 'flex-none' : 'flex-1'}
+      className={
+        variant === 'copy'
+          ? 'flex-none'
+          : variant === 'open'
+            ? 'flex-none ml-auto'
+            : 'flex-1'
+      }
     >
       <ActionPill variant={variant} state={state} onPress={onPress} />
     </div>
