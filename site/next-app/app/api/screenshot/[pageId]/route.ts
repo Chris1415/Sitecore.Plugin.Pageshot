@@ -30,6 +30,7 @@ import {
   getSitecoreToken,
   invalidateSitecoreToken,
   SitecoreTokenConfigError,
+  SitecoreTokenFetchError,
 } from '@/lib/sitecore-token';
 
 export const runtime = 'nodejs';
@@ -186,11 +187,7 @@ export async function GET(
   try {
     token = await getSitecoreToken();
   } catch (err) {
-    if (err instanceof SitecoreTokenConfigError) {
-      return errorEnvelope('auth', 500, ADMIN_MUST_CONFIGURE);
-    }
-    // Any other failure from the token endpoint → upstream_unavailable.
-    return errorEnvelope('upstream_unavailable', 500);
+    return mapTokenError(err);
   }
 
   // First Agent API attempt.
@@ -209,10 +206,7 @@ export async function GET(
     try {
       retryToken = await getSitecoreToken();
     } catch (err) {
-      if (err instanceof SitecoreTokenConfigError) {
-        return errorEnvelope('auth', 500, ADMIN_MUST_CONFIGURE);
-      }
-      return errorEnvelope('upstream_unavailable', 500);
+      return mapTokenError(err);
     }
 
     try {
@@ -255,6 +249,31 @@ async function mapUpstreamStatus(upstream: Response): Promise<Response> {
   // Any other non-ok status (e.g. 400, 403) → unknown. We deliberately do
   // NOT echo the upstream body to avoid leaking any incidental secrets.
   return errorEnvelope('unknown', 500);
+}
+
+/**
+ * Map a thrown error from `getSitecoreToken()` to the right envelope:
+ *   - `SitecoreTokenConfigError` (missing env)              → `auth` + admin message (FR-13)
+ *   - `SitecoreTokenFetchError` with 4xx (bad credentials)  → `auth` (credential rejection)
+ *   - `SitecoreTokenFetchError` with 5xx or status 0        → `upstream_unavailable`
+ *   - anything else                                         → `upstream_unavailable`
+ *
+ * Credential rejection from the auth endpoint (400/401/403) is categorically an
+ * auth problem, NOT a transient upstream outage — surfacing it as "try again
+ * in a moment" would hide a real admin-action-required condition from the
+ * editor and delay remediation. See § 4c-6 / FR-13 / auth.md § 5.
+ */
+function mapTokenError(err: unknown): Response {
+  if (err instanceof SitecoreTokenConfigError) {
+    return errorEnvelope('auth', 500, ADMIN_MUST_CONFIGURE);
+  }
+  if (err instanceof SitecoreTokenFetchError) {
+    if (err.status >= 400 && err.status < 500) {
+      return errorEnvelope('auth', 500);
+    }
+    return errorEnvelope('upstream_unavailable', 500);
+  }
+  return errorEnvelope('upstream_unavailable', 500);
 }
 
 function mapFetchRejection(err: unknown): Response {
