@@ -57,6 +57,11 @@ export function useDownloadImage(
   const { imageBase64, siteName, pageName, capturedAt } = params;
   const [status, setStatus] = useState<DownloadStatus>('idle');
 
+  // In-flight guard as a ref so `download` can stay stable — if we keyed off
+  // `status` we'd recreate the callback on every transition, which ripples
+  // into every consumer effect that depends on `download`.
+  const downloadingRef = useRef<boolean>(false);
+
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -65,7 +70,8 @@ export function useDownloadImage(
   }, []);
 
   const download = useCallback<UseDownloadImageResult['download']>(async () => {
-    if (status === 'downloading') return;
+    if (downloadingRef.current) return;
+    downloadingRef.current = true;
 
     setStatus('downloading');
 
@@ -104,6 +110,7 @@ export function useDownloadImage(
     }, 60_000);
 
     setStatus('downloaded');
+    downloadingRef.current = false;
 
     // Auto-revert the "downloaded" label after the § 4c-4 1.4 s window.
     if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
@@ -111,7 +118,7 @@ export function useDownloadImage(
       setStatus('idle');
       revertTimerRef.current = null;
     }, 1400);
-  }, [imageBase64, siteName, pageName, capturedAt, status]);
+  }, [imageBase64, siteName, pageName, capturedAt]);
 
   return { status, download };
 }

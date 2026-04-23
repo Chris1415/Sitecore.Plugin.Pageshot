@@ -35,6 +35,10 @@ function base64ToBytes(base64: string): Uint8Array {
 export function useOpenImage(imageBase64: string): UseOpenImageResult {
   const [status, setStatus] = useState<OpenStatus>('idle');
 
+  // In-flight guard tracked via ref so the callback stays stable across
+  // status transitions (same rationale as `useDownloadImage`).
+  const openingRef = useRef<boolean>(false);
+
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
@@ -43,7 +47,8 @@ export function useOpenImage(imageBase64: string): UseOpenImageResult {
   }, []);
 
   const open = useCallback<UseOpenImageResult['open']>(() => {
-    if (status === 'opening') return;
+    if (openingRef.current) return;
+    openingRef.current = true;
     setStatus('opening');
 
     const bytes = base64ToBytes(imageBase64);
@@ -57,6 +62,7 @@ export function useOpenImage(imageBase64: string): UseOpenImageResult {
     const newWin = window.open(url, '_blank', 'noopener,noreferrer');
 
     setStatus(newWin ? 'opened' : 'blocked');
+    openingRef.current = false;
 
     if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
     revertTimerRef.current = setTimeout(() => {
@@ -68,7 +74,7 @@ export function useOpenImage(imageBase64: string): UseOpenImageResult {
     setTimeout(() => {
       URL.revokeObjectURL(url);
     }, 60_000);
-  }, [imageBase64, status]);
+  }, [imageBase64]);
 
   return { status, open };
 }
