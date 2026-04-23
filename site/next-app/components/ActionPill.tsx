@@ -165,7 +165,10 @@ export function ActionPill(props: ActionPillProps) {
         // Flex sizing hints — Copy is `flex-none min-w-24`, Download/Retry
         // are `flex-1` per § 4c-4.
         variant === 'copy' && 'min-w-24 flex-none',
-        (variant === 'download' || variant === 'open' || variant === 'retry') && 'flex-1',
+        (variant === 'download' || variant === 'retry') && 'flex-1',
+        // Open sits at the far-right edge of the action bar — natural width,
+        // no flex growth, so the preceding Download grows to fill the gap.
+        variant === 'open' && 'flex-none',
         // Denied: one-shot shake keyframe then lock to disabled.
         state === 'denied' && 'animate-shake',
       )}
