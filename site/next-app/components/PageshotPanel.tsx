@@ -46,6 +46,8 @@ import {
   type Viewport,
 } from './ViewportToggle';
 import { HeightToggle, type HeightPreset } from './HeightToggle';
+import { ThemeToggle } from './ThemeToggle';
+import { useThemeMode } from './useThemeMode';
 import { trimBottomPadding } from '../lib/trim-image';
 
 // -----------------------------------------------------------------------------
@@ -95,6 +97,8 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
 
   const [viewports, setViewports] = useState<Viewport[]>(['desktop']);
   const [height, setHeight] = useState<HeightPreset>('large');
+  const { mode: themeMode, resolved: resolvedTheme, setMode: setThemeMode } =
+    useThemeMode();
 
   // Focus refs. `firstCopyRef` receives the Copy pill from the FIRST capture
   // block after ready — mount it below via a callback so the CaptureBlock
@@ -303,15 +307,22 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
         panelRef.current = el;
       }}
       aria-label="PageShot capture panel"
-      className="flex min-h-full flex-col gap-5 bg-background p-5 font-sans text-foreground @container/panel"
+      data-theme={resolvedTheme}
+      className={[
+        'flex min-h-full flex-col gap-5 bg-background p-5 font-sans text-foreground @container/panel',
+        resolvedTheme === 'dark' ? 'dark' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <header className="flex items-center gap-2">
+      <header className="flex items-center justify-between gap-2">
         <span
           data-testid="wordmark"
           className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
         >
           PageShot
         </span>
+        <ThemeToggle mode={themeMode} onChange={setThemeMode} />
       </header>
 
       <section
