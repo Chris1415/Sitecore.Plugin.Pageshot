@@ -120,7 +120,7 @@ export function Shutter(props: ShutterProps) {
         className={cn(
           // Base: 112 px circle, Blok primary hero, no native outline.
           'relative flex h-28 w-28 items-center justify-center rounded-full',
-          'bg-primary text-primary-foreground',
+          'bg-primary text-inverse-text',
           'shadow-md ring-4 ring-primary-background',
           'transition-[transform,background-color,box-shadow] duration-150',
           'focus:outline-none',
