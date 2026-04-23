@@ -1,40 +1,33 @@
 'use client';
 
 /**
- * T018b — `<ActionPill>` Copy / Download / Retry pill.
+ * T018b — `<ActionPill>` Copy / Download / Retry pill — Blok redesign pass.
  *
- * Visual source of truth: `products/pageshot/pocs/poc-v2/index.html`
- * `.action-pill` block. Copy + state timings come from § 4c-4.
+ * Replaces the Shutterbug amber-tinted custom pill with the Blok `<Button>`
+ * primitive (shadcn/radix-nova). All functional behaviour (success auto-revert
+ * timers, disabled semantics, keyboard activation, data-testid icon swaps,
+ * denied shake one-shot) is preserved — only the visual surface changes.
  *
- * Props (per § 4 T018b):
- *   - `variant`   — "copy" | "download" | "retry". Drives the icon + default
- *                   label + the success auto-revert window (Copy = 1.8 s,
- *                   Download = 1.4 s).
- *   - `state`     — "idle" | "success" | "disabled" | "denied". Default "idle".
- *   - `onPress`   — fired on click (and native Enter / Space keyboard
- *                   activation on the underlying <button>).
+ * Visual mapping (Blok → Shutterbug replacement):
+ *   - idle           → Button variant="outline"  colorScheme="neutral"
+ *   - hover/pressed  → inherited from Blok outline+neutral (neutral-bg, neutral-bg-active)
+ *   - focus-visible  → Blok `focus-visible:ring-primary` (from base Button)
+ *   - success        → Button variant="outline" colorScheme="success" + Check icon
+ *   - disabled       → Button disabled attribute (Blok flattens opacity)
+ *   - denied         → still applies `animate-shake` keyframe (kept in globals.css)
+ *   - retry          → Button variant="default" colorScheme="primary"
  *
- * Behaviour (§ 4c-4):
- *   - Base:          `h-10 rounded-full border border-stone-300 bg-white px-4
- *                     text-sm font-medium text-stone-900`.
- *   - Hover:         `bg-amber-50 border-amber-300`.
- *   - Focus-visible: `ring-2 ring-amber-400 ring-offset-2
- *                     ring-offset-amber-50`.
- *   - Pressed:       `bg-amber-100`.
- *   - Success:       `bg-amber-50 border-amber-300 text-amber-700` + Check
- *                    icon prepended. Label morphs to "Copied" / "Saved"; after
- *                    1.8 s / 1.4 s the pill reverts to idle (internal timer;
- *                    parent can re-drive the success prop at any time).
- *   - Disabled:      `opacity-50 cursor-not-allowed`.
- *   - Denied         (Copy only — applied by T020b): `animate-shake` keyframe
- *                    once, then lock to disabled.
- *   - Retry variant: `border-amber-400 text-amber-700` default (replaces
- *                    Download in error state).
+ * Shape kept identical to § 4c-4: `h-10 rounded-full`, `flex-none min-w-24`
+ * for copy / `flex-1` for download+retry, consistent icon + label spacing.
+ *
+ * Props, exports, and data-testid values are unchanged — the component's
+ * public API is stable across the redesign.
  */
 
 import { Check, Copy, Download, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type ActionPillVariant = 'copy' | 'download' | 'retry';
@@ -71,11 +64,11 @@ const VARIANTS: Record<ActionPillVariant, VariantConfig> = {
     iconTestId: 'action-pill-icon-download',
   },
   retry: {
-    idleLabel: 'Retry',
     // Retry does not have a success window in v1 — a successful retry
     // transitions the parent panel to `capturing` then `ready`, at which point
     // the Retry pill is replaced by Copy + Download. Define a zero window so
     // the effect is a no-op if a caller ever flips `state="success"` here.
+    idleLabel: 'Retry',
     successLabel: 'Retry',
     successRevertMs: 0,
     IconIdle: RefreshCw,
@@ -90,18 +83,11 @@ export function ActionPill(props: ActionPillProps) {
   // Internal success-revert latch. When the parent flips `state="success"`,
   // the pill shows the success label for the variant's window, then reverts
   // to the idle label even if the parent keeps `state="success"`.
-  //
-  // `reverted` tracks whether the revert timer has fired for the current
-  // success run. setState is invoked only from inside the setTimeout
-  // callback (async) — which is permitted by the React 19
-  // `react-hooks/set-state-in-effect` rule; the rule forbids synchronous
-  // setState during the effect body, not setState queued by async callbacks.
   const [reverted, setReverted] = useState<boolean>(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (state === 'success' && cfg.successRevertMs > 0) {
-      // Re-arm the timer for this success run.
       if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
       revertTimerRef.current = setTimeout(() => {
         setReverted(true);
@@ -114,10 +100,6 @@ export function ActionPill(props: ActionPillProps) {
         }
       };
     }
-    // Not in success (or zero-window variant) — cancel any in-flight timer.
-    // We do NOT call setReverted here (would violate the React 19 effect-body
-    // rule). Instead, the next success run clears `reverted` via the separate
-    // reset effect below.
     if (revertTimerRef.current) {
       clearTimeout(revertTimerRef.current);
       revertTimerRef.current = null;
@@ -125,10 +107,7 @@ export function ActionPill(props: ActionPillProps) {
     return undefined;
   }, [state, cfg.successRevertMs]);
 
-  // Reset the `reverted` latch when the parent exits `success` — uses the
-  // setState-inside-setTimeout pattern (one microtask out) so it does not
-  // execute in the effect-body phase. The 0 ms timeout is a standard
-  // React-compatible "next tick" primitive.
+  // Reset the `reverted` latch when the parent exits `success`.
   useEffect(() => {
     if (state !== 'success' && reverted) {
       const id = setTimeout(() => setReverted(false), 0);
@@ -144,9 +123,22 @@ export function ActionPill(props: ActionPillProps) {
   const IconComponent = showingSuccess ? Check : cfg.IconIdle;
   const iconTestId = showingSuccess ? 'action-pill-icon-check' : cfg.iconTestId;
 
+  // Blok variant + colorScheme mapping.
+  // Retry is the hero error-recovery CTA → default+primary.
+  // Copy/Download are secondary actions → outline+neutral, flipping to
+  // outline+success on the success flash.
+  const bokVariant = variant === 'retry' ? 'default' : 'outline';
+  const bokColorScheme = (() => {
+    if (variant === 'retry') return 'primary';
+    if (showingSuccess) return 'success';
+    return 'neutral';
+  })();
+
   return (
-    <button
+    <Button
       type="button"
+      variant={bokVariant}
+      colorScheme={bokColorScheme}
       onClick={() => {
         if (isDisabled) return;
         onPress();
@@ -156,32 +148,16 @@ export function ActionPill(props: ActionPillProps) {
       data-variant={variant}
       data-state={state}
       className={cn(
-        // Base pill.
-        'inline-flex h-10 items-center justify-center gap-2 rounded-full border px-4',
-        'text-sm font-medium',
-        // Focus-visible amber ring offset from amber-50.
-        'focus:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50',
-        // Default border + surface per variant (retry gets the amber accent).
-        variant === 'retry'
-          ? 'border-amber-400 bg-white text-amber-700'
-          : 'border-stone-300 bg-white text-stone-900',
-        // Hover + pressed — only when not disabled.
-        !isDisabled && 'hover:bg-amber-50 hover:border-amber-300 active:bg-amber-100',
-        // Success visual override: amber-50 surface + amber-700 text + amber
-        // border.
-        showingSuccess && 'border-amber-300 bg-amber-50 text-amber-700',
-        // Disabled: flat opacity + cursor.
-        isDisabled && 'opacity-50 cursor-not-allowed',
-        // Denied: one-shot shake keyframe then lock to disabled (applied
-        // alongside the disabled styling when state==='denied').
-        state === 'denied' && 'animate-shake',
-        // Flex sizing hints baked into variant — Copy is `flex-none min-w-24`,
-        // Download/Retry are `flex-1` per § 4c-4. These are layout hints the
-        // parent `<div class="flex">` inherits; pills can also be rendered
-        // standalone without these taking effect.
+        // Blok `Button` defaults to a taller size; § 4c-4 calls for h-10
+        // pill-shape. Override here to match the historical ActionPill footprint
+        // while keeping all Blok base utilities (focus ring, typography, svg).
+        'h-10 rounded-full text-sm font-medium',
+        // Flex sizing hints — Copy is `flex-none min-w-24`, Download/Retry
+        // are `flex-1` per § 4c-4.
         variant === 'copy' && 'min-w-24 flex-none',
         (variant === 'download' || variant === 'retry') && 'flex-1',
+        // Denied: one-shot shake keyframe then lock to disabled.
+        state === 'denied' && 'animate-shake',
       )}
     >
       <span
@@ -192,6 +168,6 @@ export function ActionPill(props: ActionPillProps) {
         <IconComponent className="h-[15px] w-[15px]" strokeWidth={2} />
       </span>
       <span>{label}</span>
-    </button>
+    </Button>
   );
 }

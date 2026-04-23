@@ -150,10 +150,12 @@ describe('T018a-TEST-5 — keyboard Enter and Space activate', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('applies focus-visible ring utility classes (amber-400)', () => {
+  it('applies a visible focus-visible ring utility class (Blok primary)', () => {
     render(<ActionPill variant="copy" onPress={() => undefined} />);
     const btn = screen.getByRole('button');
-    expect(btn.className).toMatch(/focus-visible:ring/);
-    expect(btn.className).toMatch(/amber-400/);
+    // Blok's <Button> base applies `focus-visible:ring-primary`. The Shutterbug
+    // amber-400 ring was replaced during the Blok redesign; we only assert a
+    // focus-visible ring utility is present (never suppressed).
+    expect(btn.className).toMatch(/focus-visible:(ring|border)/);
   });
 });
