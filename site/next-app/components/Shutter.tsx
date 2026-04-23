@@ -1,34 +1,28 @@
 'use client';
 
 /**
- * T014b — `<Shutter>` hero button.
+ * T014b — `<Shutter>` hero button — Blok redesign pass.
  *
- * Visual source of truth: `products/pageshot/pocs/poc-v2/index.html` `.shutter`
- * block (112 × 112 amber circle, aperture ring, 380 ms spring press, 200/420 ms
- * capture bloom). Copy source of truth: § 4c-4 of the task breakdown.
+ * The 112 × 112 px circular hero button stays — only its colour language
+ * changes. Amber-500 fill → Blok `bg-primary` (Sitecore brand token); amber-200
+ * aperture ring → muted primary; amber-400 focus ring → Blok `ring-ring`. The
+ * press-spring and bloom keyframes are kept in globals.css so the camera-click
+ * feel remains intact; they are motion tokens, not brand tokens, and Blok does
+ * not ship equivalents.
  *
  * Props (per § 4 T014b):
  *   - `state`            — "idle" | "capturing" | "capturing-slow" | "disabled"
- *   - `elapsedSeconds?`  — seconds visible on the label when state is
- *                          "capturing-slow"; rendered by `<ShutterLabel>` (T015),
- *                          not by this component, but kept on the contract so
- *                          the outer panel can thread it through.
- *   - `onPress`          — fired on click (and implicitly on native Enter /
- *                          Space keyboard activation).
+ *   - `elapsedSeconds?`  — rendered by `<ShutterLabel>` (T015), kept on the
+ *                          contract so the outer panel can thread it through.
+ *   - `onPress`          — fired on click (and implicitly on Enter / Space).
  *
  * Accessibility (§ 4c-4 + § 4 T014b):
  *   - `aria-label`       = "Capture screenshot" (idle / disabled) or
  *                          "Capturing screenshot" (capturing / capturing-slow).
  *   - `aria-busy="true"` while capturing.
- *   - `:focus-visible`   — amber-400 ring offset 2 px from amber-50, never
- *                          suppressed (`focus-visible:ring-*` + `focus:outline-none`
- *                          is the Tailwind idiom; the outline-none applies
- *                          only when `:focus-visible` is already swapping to
- *                          the ring).
+ *   - `:focus-visible`   — Blok ring-ring offset from bg-background.
  *   - Reduced motion     — `(prefers-reduced-motion: reduce)` suppresses the
- *                          `animate-shutter-press` class and the bloom overlay's
- *                          `animate-shutter-bloom` class; both collapse to
- *                          static opacity per § 4c-4.
+ *                          `animate-shutter-press` class and the bloom overlay.
  */
 
 import { Aperture, Camera } from 'lucide-react';
@@ -48,12 +42,6 @@ export interface ShutterProps {
   onPress: () => void;
 }
 
-/**
- * Read `prefers-reduced-motion: reduce`. The initial value is resolved lazily
- * from `matchMedia` (never re-runs on re-render) so the effect only wires the
- * change listener — no setState-in-effect lint violation. Safe during SSR:
- * `window` is guarded by `typeof`.
- */
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState<boolean>(() => {
     if (typeof window === 'undefined' || !window.matchMedia) {
@@ -95,8 +83,6 @@ export function Shutter(props: ShutterProps) {
 
   const handleClick = useCallback(() => {
     if (isDisabled) return;
-    // Motion tokens: under reduced-motion, never flip the spring / bloom
-    // classes. The click still fires onPress — behaviour is unchanged.
     if (!reducedMotion) {
       setPressPulse(true);
       setBloomActive(true);
@@ -132,20 +118,19 @@ export function Shutter(props: ShutterProps) {
         aria-label={label}
         aria-busy={isCapturing ? 'true' : undefined}
         className={cn(
-          // Base: 112 px circle, amber-500 hero, no native outline (we swap
-          // to a focus-visible ring below).
+          // Base: 112 px circle, Blok primary hero, no native outline.
           'relative flex h-28 w-28 items-center justify-center rounded-full',
-          'bg-amber-500 text-white',
-          'shadow-shutter ring-4 ring-amber-200',
+          'bg-primary text-primary-foreground',
+          'shadow-md ring-4 ring-primary-background',
           'transition-[transform,background-color,box-shadow] duration-150',
           'focus:outline-none',
-          // Focus-visible amber ring offset from amber-50 panel background.
-          'focus-visible:ring-4 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50',
+          // Focus-visible Blok ring offset from panel background.
+          'focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           // Hover / active — disabled state overrides below.
-          !isDisabled && 'hover:bg-amber-600 hover:ring-amber-300',
+          !isDisabled && 'hover:bg-primary-hover hover:ring-primary-background-active',
           !isDisabled && !reducedMotion && 'active:scale-[0.92]',
           isCapturing && 'cursor-progress',
-          isDisabled && 'bg-amber-200 cursor-not-allowed !shadow-none !ring-0',
+          isDisabled && 'bg-muted cursor-not-allowed !shadow-none !ring-0',
           // Press spring — only when reduced-motion is OFF.
           pressPulse && !reducedMotion && 'animate-shutter-press',
         )}

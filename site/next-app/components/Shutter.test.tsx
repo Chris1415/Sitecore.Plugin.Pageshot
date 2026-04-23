@@ -44,9 +44,10 @@ describe('T014a-TEST-1 — Shutter renders default idle state with correct ARIA'
     const btn = screen.getByRole('button', { name: /capture screenshot/i });
     expect(btn).toBeInTheDocument();
     expect(btn).not.toHaveAttribute('aria-busy');
-    // Amber palette + circular intent.
+    // Circular intent + primary-brand hero fill (Blok redesign replaced
+    // the Shutterbug amber palette with Blok semantic tokens).
     expect(btn.className).toMatch(/rounded-full/);
-    expect(btn.className).toMatch(/amber/);
+    expect(btn.className).toMatch(/bg-primary/);
     // Camera icon present. Lucide renders an inline <svg> — we assert by
     // a stable data-testid the component exposes on the icon wrapper so
     // the test is not coupled to a specific Lucide SVG attribute set.
