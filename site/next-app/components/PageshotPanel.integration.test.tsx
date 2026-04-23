@@ -478,12 +478,21 @@ describe('T025-TEST-1 — golden-path end-to-end inside jsdom', () => {
     const items = writeArgs[0] as ClipboardItem[];
     expect(items.length).toBe(1);
 
-    // Click Download — synthesizes an <a download=filename>.
+    // Click Download — submits a POST form to /api/download with target=_blank.
+    // The form carries the image base64 + sanitized filename; the browser
+    // treats the server response's Content-Disposition header as a download,
+    // which works even when the iframe sandbox lacks `allow-downloads`.
     const downloadBtn = screen.getByRole('button', { name: /^download$/i });
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(function mockClick(this: HTMLAnchorElement) {
-        expect(this.getAttribute('download')).toMatch(
+    const submitSpy = vi
+      .spyOn(HTMLFormElement.prototype, 'submit')
+      .mockImplementation(function mockSubmit(this: HTMLFormElement) {
+        expect(this.getAttribute('method')?.toLowerCase()).toBe('post');
+        expect(this.getAttribute('action')).toBe('/api/download');
+        expect(this.getAttribute('target')).toBe('_blank');
+        const filenameInput = this.querySelector<HTMLInputElement>(
+          'input[name="filename"]',
+        );
+        expect(filenameInput?.value).toMatch(
           /^acme_home_\d{8}-\d{4}\.png$/,
         );
       });
@@ -491,9 +500,9 @@ describe('T025-TEST-1 — golden-path end-to-end inside jsdom', () => {
       fireEvent.click(downloadBtn);
     });
     await waitFor(() => {
-      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(submitSpy).toHaveBeenCalledTimes(1);
     });
-    clickSpy.mockRestore();
+    submitSpy.mockRestore();
   });
 });
 

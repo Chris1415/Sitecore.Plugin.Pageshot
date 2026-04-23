@@ -76,38 +76,50 @@ export function useDownloadImage(
     ) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'image/png' });
 
-    const url = URL.createObjectURL(blob);
     const filename = buildScreenshotFilename(siteName, pageName, capturedAt);
 
-    // Inside a sandboxed iframe (Sitecore Pages), the parent's sandbox must
-    // include `allow-downloads` for <a download> to trigger. We can't set
-    // that — only the host can. `window.open(url, '_blank')` escapes the
-    // sandbox by opening a real top-level window; the browser then handles
-    // the blob URL in that new context. If the browser's download mode
-    // doesn't auto-save, the PNG renders inline in the new tab and the
-    // user can right-click → Save Image As — preserving our filename via
-    // the blob's object URL. Requires `allow-popups` in the iframe sandbox,
-    // which the host has already allowed.
+    // Primary path (Option 1): form POST to /api/download with target=_blank.
+    // The server responds with Content-Disposition: attachment; filename=X,
+    // which browsers honor as a file save even when the iframe sandbox is
+    // missing `allow-downloads`. Form submissions receive more favorable
+    // treatment than window.open or <a download> in restricted sandboxes
+    // because they are first-class user-gesture navigations.
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/download';
+    form.target = '_blank';
+    form.enctype = 'application/x-www-form-urlencoded';
+    form.style.display = 'none';
+
+    const imageInput = document.createElement('input');
+    imageInput.type = 'hidden';
+    imageInput.name = 'image';
+    imageInput.value = imageBase64;
+    form.appendChild(imageInput);
+
+    const filenameInput = document.createElement('input');
+    filenameInput.type = 'hidden';
+    filenameInput.name = 'filename';
+    filenameInput.value = filename;
+    form.appendChild(filenameInput);
+
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => {
+      if (form.parentNode) form.parentNode.removeChild(form);
+    }, 10_000);
+
+    // Secondary path (Option 2, fallback / belt-and-suspenders): open the
+    // blob URL in a new tab. If the sandbox permits popups, the browser
+    // renders the PNG inline and the user can right-click → Save Image As.
+    // If the form POST above already triggered a download, the new tab
+    // shows the same image in a second tab — minor UX noise, but the
+    // primary download has already fired so no harm done.
     //
-    // Revoke is deferred 60s so the new-tab save dialog has time to complete
-    // before the object URL becomes invalid.
-    const newWin = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!newWin) {
-      // Popup was blocked (sandbox without allow-popups, or user-level
-      // blocker). Fall back to the anchor-click path so there's at least
-      // a chance the sandbox permits download-anchors.
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener';
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      setTimeout(() => {
-        if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
-      }, 60_000);
-    }
+    // We keep revoke deferred 60s so the blob URL remains valid for the
+    // new tab's save-image-as flow.
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
 
     setTimeout(() => {
       URL.revokeObjectURL(url);
