@@ -556,18 +556,19 @@ interface ShutterWithButtonRefProps {
 
 function ShutterWithButtonRef(props: ShutterWithButtonRefProps) {
   const { buttonRef, state, elapsedSeconds, onPress } = props;
-  const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
-  });
+  // Capture the inner <button> via a ref callback on the wrapping <div>.
+  // Running this on every ref commit — rather than a post-render useEffect —
+  // avoids scheduling an extra render pass for what is purely ref plumbing.
+  const setWrap = useCallback(
+    (el: HTMLDivElement | null) => {
+      buttonRef.current = el?.querySelector('button') ?? null;
+    },
+    [buttonRef],
+  );
 
   return (
-    <div
-      ref={(el) => {
-        wrapRef.current = el;
-      }}
-    >
+    <div ref={setWrap}>
       <Shutter state={state} elapsedSeconds={elapsedSeconds} onPress={onPress} />
     </div>
   );
@@ -582,18 +583,20 @@ interface ActionPillWithButtonRefProps {
 
 function ActionPillWithButtonRef(props: ActionPillWithButtonRefProps) {
   const { buttonRef, variant, state, onPress } = props;
-  const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!buttonRef) return;
-    buttonRef.current = wrapRef.current?.querySelector('button') ?? null;
-  });
+  // Capture the inner <button> via a ref callback — see rationale on
+  // `ShutterWithButtonRef` above.
+  const setWrap = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!buttonRef) return;
+      buttonRef.current = el?.querySelector('button') ?? null;
+    },
+    [buttonRef],
+  );
 
   return (
     <div
-      ref={(el) => {
-        wrapRef.current = el;
-      }}
+      ref={setWrap}
       className={
         variant === 'copy'
           ? 'flex-none'
