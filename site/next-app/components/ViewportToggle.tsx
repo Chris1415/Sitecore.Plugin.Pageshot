@@ -1,21 +1,28 @@
 'use client';
 
 /**
- * Post-MVP viewport selector (T029 dogfood extension).
+ * Post-MVP viewport selector (T029 dogfood extension) — Blok redesign pass.
  *
- * MULTI-SELECT: the editor can enable Mobile, Desktop, or both. When both are
- * selected, PageShot fires two captures and stacks two Polaroids below each
- * other — one per viewport (per PRD mid-dogfood extension request).
+ * Replaces the custom amber/stone pill group with a Blok-tokened toggle-group
+ * surface. No Blok `toggle-group` primitive is installed in this project
+ * (registry lookup returned none), so the component remains a composition of
+ * native `<button aria-pressed>` elements — now styled with Blok semantic
+ * tokens so the panel respects light/dark mode and Sitecore brand colours.
  *
- * Constraint: at least one viewport must remain selected. Clicking the only
- * active option is a no-op (returns the same selection unchanged).
+ * Behaviour (unchanged from the pre-redesign implementation):
+ *   - Multi-select: mobile, desktop, or both may be active.
+ *   - At-least-one invariant: clicking the only active option is a no-op.
+ *   - Active order is canonical (mobile then desktop).
+ *   - Full group is `aria-label="Capture viewports"`.
+ *   - Each button keeps its `aria-pressed` + `aria-label` + `data-testid`.
  *
- * Each option is a toggle button with `aria-pressed`. Tab reaches each
- * button in DOM order; Enter/Space activates. Active = amber fill.
+ * Tests cover the behaviour matrix; this file touches only the class chain.
  */
 
 import { Monitor, Smartphone } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
 
 export type Viewport = 'mobile' | 'desktop';
 
@@ -54,13 +61,10 @@ export function ViewportToggle({
   const toggle = (v: Viewport) => {
     if (disabled) return;
     if (isActive(v)) {
-      // Refuse to deselect the only remaining selection — at least one
-      // viewport must stay active or Capture has nothing to do.
       if (value.length <= 1) return;
       onChange(ORDER.filter((x) => x !== v && isActive(x)));
       return;
     }
-    // Activating — preserve canonical order (mobile, desktop).
     onChange(ORDER.filter((x) => x === v || isActive(x)));
   };
 
@@ -69,7 +73,9 @@ export function ViewportToggle({
       role="group"
       aria-label="Capture viewports"
       data-testid="viewport-toggle"
-      className="flex w-full gap-1 rounded-full border border-stone-200/70 bg-white/60 p-1 text-sm"
+      className={cn(
+        'flex w-full gap-1 rounded-full border border-border bg-muted p-1 text-sm',
+      )}
     >
       {ORDER.map((v) => {
         const active = isActive(v);
@@ -83,14 +89,14 @@ export function ViewportToggle({
             data-testid={`viewport-${v}`}
             disabled={disabled}
             onClick={() => toggle(v)}
-            className={[
+            className={cn(
               'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:ring-offset-amber-50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
               'disabled:cursor-not-allowed disabled:opacity-60',
               active
-                ? 'bg-amber-400 text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:bg-amber-50',
-            ].join(' ')}
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            )}
           >
             <Icon aria-hidden="true" className="h-4 w-4" />
             <span>{VIEWPORT_LABELS[v]}</span>
