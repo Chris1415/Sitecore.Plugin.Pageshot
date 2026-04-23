@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Post-MVP height preset selector (T029 dogfood extension).
+ * Post-MVP height preset selector (T029 dogfood extension) — Blok redesign pass.
  *
  * The Agent API's `/screenshot` endpoint treats `height` as the exact
  * output-image height (not a viewport hint, not a minimum). There's no
@@ -13,11 +13,15 @@
  *   - large  = 4000 px (long marketing pages — PageShot default)
  *   - full   = 8000 px (safely tall for nearly anything)
  *
- * Single-select radio group. Enter / Space / click activates; Left/Right
- * arrow switches (roving tabindex). Active pill = amber fill.
+ * Single-select radio group with roving tabindex. Keyboard (Left/Right,
+ * Home/End) + click behaviour preserved; styling swapped from Shutterbug
+ * amber/stone to Blok semantic tokens (primary for active, muted/accent
+ * for the container + hover, ring-ring for focus).
  */
 
 import { useCallback, useRef, type KeyboardEvent } from 'react';
+
+import { cn } from '@/lib/utils';
 
 export type HeightPreset = 'small' | 'medium' | 'large' | 'full';
 
@@ -94,7 +98,7 @@ export function HeightToggle({
       role="radiogroup"
       aria-label="Capture height"
       data-testid="height-toggle"
-      className="flex w-full gap-1 rounded-full border border-stone-200/70 bg-white/60 p-1 text-[13px]"
+      className="flex w-full gap-1 rounded-full border border-border bg-muted p-1 text-[13px]"
     >
       {ORDER.map((preset, index) => {
         const active = preset === value;
@@ -113,14 +117,14 @@ export function HeightToggle({
             disabled={disabled}
             onClick={() => onChange(preset)}
             onKeyDown={(event) => handleKeyDown(event, index)}
-            className={[
+            className={cn(
               'flex flex-1 items-center justify-center rounded-full px-2 py-1.5 font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:ring-offset-amber-50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
               'disabled:cursor-not-allowed disabled:opacity-60',
               active
-                ? 'bg-amber-400 text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:bg-amber-50',
-            ].join(' ')}
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            )}
           >
             {HEIGHT_PRESET_LABELS[preset]}
           </button>
