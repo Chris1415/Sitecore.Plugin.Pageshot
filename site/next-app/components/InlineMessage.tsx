@@ -1,32 +1,31 @@
 'use client';
 
 /**
- * T022b — `<InlineMessage>` slot.
+ * T022b — `<InlineMessage>` slot — Blok redesign pass.
  *
- * Source of truth: § 4c-4 copy block + § 4 T022b styling. The per-code error
- * title + subtitle + icon live inside `<PolaroidCard>`'s error variant (the
- * "error-in-polaroid" pattern); this component is the secondary copy slot,
- * used for the clipboard-denied fallback and any non-error hint shown below
- * the action bar.
+ * Migrates off the custom Shutterbug rose/stone inline strip onto the Blok
+ * `<Alert>` primitive. Preserves the visibility contract:
+ *   - When `visible === false`, renders a stub div with `display: none`
+ *     + `aria-hidden="true"` so screen readers skip it and the action bar
+ *     does not reserve vertical space.
+ *   - When `visible === true`, renders a Blok Alert with `role="status"`
+ *     + `aria-live="polite"` so polite announcements still happen when a
+ *     message becomes visible.
  *
- * Props:
- *   - `visible`  — boolean. When false, the node is rendered with
- *                  `display: none` + `data-visible="false"` so it is hidden
- *                  from the a11y tree (screen readers do not announce hidden
- *                  content) AND layout is not reserved (the action bar does
- *                  not jump).
- *   - `tone?`    — 'info' | 'warn'. Default 'info'. Drives the border/surface
- *                  (no semantic change — still `role="status"` so polite
- *                  announcements work for both).
- *   - `children` — the text / nodes to render.
+ * Tone mapping:
+ *   - `info` (default) → Alert variant="default" (Blok neutral/info surface)
+ *   - `warn`           → Alert variant="warning"
  *
- * Accessibility:
- *   - `role="status"` + `aria-live="polite"` — changes are announced politely
- *     once the node becomes visible.
+ * NOTE: Blok's `<Alert>` default renders `role="alert"`; to keep the existing
+ * announcement semantics (polite, not assertive) we render a lightweight
+ * Alert-styled `<div>` with an explicit `role="status"` + `aria-live="polite"`.
+ * The visual layering (border, surface, icon slot) matches Blok tokens.
  */
 
+import { mdiAlertOutline, mdiInformationOutline } from '@mdi/js';
 import type { ReactNode } from 'react';
 
+import { Icon } from '@/lib/icon';
 import { cn } from '@/lib/utils';
 
 export interface InlineMessageProps {
@@ -53,6 +52,8 @@ export function InlineMessage({
     );
   }
 
+  const iconPath = tone === 'warn' ? mdiAlertOutline : mdiInformationOutline;
+
   return (
     <div
       data-inline-message
@@ -60,14 +61,21 @@ export function InlineMessage({
       data-tone={tone}
       role="status"
       aria-live="polite"
+      data-slot="alert"
       className={cn(
-        'mt-2 rounded-lg border px-3 py-2 text-xs',
+        // Blok Alert base: rounded, padded surface with icon + body grid.
+        'relative mt-2 grid w-full grid-cols-[calc(var(--spacing)*4)_1fr] items-center gap-x-3 gap-y-0.5 rounded-md px-3 py-2 text-xs',
         tone === 'warn'
-          ? 'border-rose-200 bg-rose-50 text-rose-700'
-          : 'border-stone-200 bg-stone-50 text-stone-600',
+          ? 'bg-warning-bg text-warning-fg'
+          : 'bg-neutral-bg text-neutral-fg',
       )}
     >
-      {children}
+      <Icon
+        path={iconPath}
+        size={0.85}
+        className={tone === 'warn' ? 'text-warning-500' : 'text-neutral-500'}
+      />
+      <div className="col-start-2">{children}</div>
     </div>
   );
 }
