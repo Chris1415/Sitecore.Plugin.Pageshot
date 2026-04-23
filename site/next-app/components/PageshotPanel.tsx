@@ -477,7 +477,7 @@ function CaptureBlock({ capture, copyRef }: CaptureBlockProps) {
             'flex items-center gap-1 rounded-full px-2 py-0.5 font-medium normal-case tracking-normal transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
             expanded
-              ? 'bg-primary text-primary-foreground'
+              ? 'bg-primary text-inverse-text'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >

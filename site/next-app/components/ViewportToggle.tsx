@@ -94,7 +94,7 @@ export function ViewportToggle({
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
               'disabled:cursor-not-allowed disabled:opacity-60',
               active
-                ? 'bg-primary text-primary-foreground shadow-sm'
+                ? 'bg-primary text-inverse-text shadow-sm'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             )}
           >
