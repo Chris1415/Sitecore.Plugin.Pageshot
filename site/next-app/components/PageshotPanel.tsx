@@ -309,7 +309,7 @@ function PageshotPanelBody({ fetchImpl }: PageshotPanelProps) {
       aria-label="PageShot capture panel"
       data-theme={resolvedTheme}
       className={[
-        'flex min-h-full flex-col gap-5 bg-background p-5 font-sans text-foreground @container/panel',
+        'flex min-h-dvh flex-col gap-5 bg-background p-5 font-sans text-foreground @container/panel',
         resolvedTheme === 'dark' ? 'dark' : '',
       ]
         .filter(Boolean)
