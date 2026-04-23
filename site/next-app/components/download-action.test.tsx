@@ -63,10 +63,10 @@ afterEach(() => {
 });
 
 // -----------------------------------------------------------------------------
-// T021a-TEST-7 — Download click synthesizes <a download> and revokes URL
+// T021a-TEST-7 — Download opens blob URL in a new window (iframe-sandbox safe)
 // -----------------------------------------------------------------------------
-describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes URL', () => {
-  it('creates an object URL for a PNG blob, clicks a synthesized <a download=filename>, and revokes the URL', async () => {
+describe('T021a-TEST-7 — Download opens blob URL in a new window, defers revoke', () => {
+  it('calls window.open with the blob URL + target=_blank; defers URL revoke', async () => {
     const capturedAt = new Date(2026, 3, 22, 9, 42, 0, 0); // April is month 3
     const { result } = renderHook(() =>
       useDownloadImage({
@@ -77,14 +77,11 @@ describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes U
       }),
     );
 
-    // Spy on `HTMLAnchorElement.click` so we can assert the synthesized
-    // element was activated exactly once with the expected `download` attr.
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function mockClick(this: HTMLAnchorElement) {
-      // Assert the synthesized anchor has the correct `download` attribute
-      // AT THE TIME click() is invoked — before the hook revokes the URL.
-      expect(this.getAttribute('download')).toBe('acme_home_20260422-0942.png');
-      expect(this.getAttribute('href')).toMatch(/^blob:mock-/);
-    });
+    // Spy on window.open. Return a truthy Window-like so the hook does
+    // NOT fall back to the anchor-click path.
+    const openSpy = vi
+      .spyOn(window, 'open')
+      .mockImplementation(() => ({}) as Window);
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => {
@@ -103,19 +100,23 @@ describe('T021a-TEST-7 — Download click synthesizes <a download> and revokes U
       expect(bytes[i]).toBe(PNG_MAGIC_BYTES[i]);
     }
 
-    // Anchor click fired once.
-    expect(clickSpy).toHaveBeenCalledTimes(1);
+    // window.open called once with the blob URL + target=_blank + noopener.
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^blob:mock-/),
+      '_blank',
+      'noopener,noreferrer',
+    );
 
-    // Revoke is DEFERRED 60s so the download doesn't get killed mid-flight
-    // in Chrome/sandboxed iframes. Before the timer elapses, the URL is still
-    // live; after 60s, revoke has been called once with the same URL.
+    // Revoke is DEFERRED 60s so the new tab has time to read the blob bytes
+    // before the object URL is invalidated.
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
     vi.advanceTimersByTime(60_000);
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(revokedUrls).toEqual(createdUrls);
     vi.useRealTimers();
 
-    clickSpy.mockRestore();
+    openSpy.mockRestore();
   });
 
   it('flips status to "downloaded" and reverts to "idle" after 1400 ms', async () => {

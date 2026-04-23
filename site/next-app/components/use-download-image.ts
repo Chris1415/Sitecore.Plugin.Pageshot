@@ -79,31 +79,37 @@ export function useDownloadImage(
     const url = URL.createObjectURL(blob);
     const filename = buildScreenshotFilename(siteName, pageName, capturedAt);
 
-    // Synthesize an <a download> element, click it, then schedule cleanup
-    // on a deferred tick.
+    // Inside a sandboxed iframe (Sitecore Pages), the parent's sandbox must
+    // include `allow-downloads` for <a download> to trigger. We can't set
+    // that — only the host can. `window.open(url, '_blank')` escapes the
+    // sandbox by opening a real top-level window; the browser then handles
+    // the blob URL in that new context. If the browser's download mode
+    // doesn't auto-save, the PNG renders inline in the new tab and the
+    // user can right-click → Save Image As — preserving our filename via
+    // the blob's object URL. Requires `allow-popups` in the iframe sandbox,
+    // which the host has already allowed.
     //
-    // Two things go wrong if you revoke the object URL synchronously after
-    // click(): some browsers (notably Chrome in sandboxed iframes) kill the
-    // in-flight download when the URL becomes invalid. We defer revocation
-    // by 60s — generous enough to let even slow disks finish writing.
-    //
-    // `target="_blank"` + `rel="noopener"` is critical inside the Sitecore
-    // Pages iframe: without it, Chrome blocks programmatic downloads unless
-    // the parent iframe has `allow-downloads` in its sandbox attribute. With
-    // target=_blank, the browser treats it as a new-context open, which
-    // respects the download attribute even in restricted iframes. The
-    // noopener ensures no rogue window.opener reference leaks.
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
+    // Revoke is deferred 60s so the new-tab save dialog has time to complete
+    // before the object URL becomes invalid.
+    const newWin = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!newWin) {
+      // Popup was blocked (sandbox without allow-popups, or user-level
+      // blocker). Fall back to the anchor-click path so there's at least
+      // a chance the sandbox permits download-anchors.
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      setTimeout(() => {
+        if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+      }, 60_000);
+    }
 
     setTimeout(() => {
-      if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
       URL.revokeObjectURL(url);
     }, 60_000);
 
