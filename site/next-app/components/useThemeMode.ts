@@ -65,12 +65,12 @@ export function useThemeMode(): UseThemeModeResult {
     getSystemTheme(),
   );
 
-  // Re-read stored mode on mount in case SSR hydration produced 'auto' but
-  // localStorage has a user choice. Safe to run unconditionally on mount.
-  useEffect(() => {
-    const stored = readStoredMode();
-    setModeState((prev) => (prev === stored ? prev : stored));
-  }, []);
+  // No post-mount re-read of stored mode: the lazy initializer above already
+  // reads localStorage on the first render, and the panel is a fully client-
+  // side route (`use client` + dynamic in layout), so SSR hydration never
+  // produces a different value we'd need to reconcile. A second setState in
+  // an effect would trip react-hooks/set-state-in-effect without changing
+  // behaviour.
 
   // Listen for system theme changes while in `auto` mode. Also listens
   // regardless of current mode so that switching back to `auto` immediately
