@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { MarketplaceProvider } from "@/components/providers/marketplace";
+import { HahnSoloFooter } from "@/components/hahn-solo-footer";
 
 // T005 — expose Geist Sans + Geist Mono under the canonical --font-sans /
 // --font-mono CSS variables expected by Tailwind's fontFamily and by the
@@ -33,7 +33,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-full`}
       >
-        <MarketplaceProvider>{children}</MarketplaceProvider>
+        {children}
+        <HahnSoloFooter />
       </body>
     </html>
   );
