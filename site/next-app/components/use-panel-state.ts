@@ -1,29 +1,9 @@
 /**
- * T013b + T029 — PageShot panel state machine + `usePanelState()` hook.
- *
- * POST-MVP (T029): the `ready` state now carries an array of captures — one
- * per viewport the editor asked PageShot to render. Single-viewport case is
- * a length-1 array; multi-viewport stacks polaroids below each other.
- *
- * States:
- *   - `idle`       — nothing to show; waiting for a capture press.
- *   - `capturing`  — upstream request(s) in flight; `startedAt` is a
- *                    `Date.now()` timestamp for the elapsed-time controller.
- *   - `ready`      — `captures: Array<Capture>`, one element per viewport.
- *                    The panel renders each as its own polaroid + actions.
- *   - `error`      — the route handler returned `{ ok: false, error }`; we copy
- *                    `code` + `message` verbatim. Any in-flight partial
- *                    captures are dropped — Retry re-runs the whole set.
- *
- * Events:
- *   - `capture`  — user pressed Shutter. Valid from `idle`, `ready`, `error`.
- *   - `resolved` — all viewport fetches succeeded; carries `captures`.
- *                  Only valid from `capturing`.
- *   - `failed`   — at least one fetch returned `{ ok: false }`; carries the
- *                  first failure's code + message. Only valid from `capturing`.
- *
- * Invalid transitions are no-ops — reducer returns the same state reference
- * so React's bail-out short-circuits re-renders.
+ * Panel state machine: idle / capturing / ready (an array of captures, one per
+ * viewport) / error. Invalid transitions return the SAME state reference so
+ * React's bail-out short-circuits the re-render, and a failure drops in-flight
+ * partial captures rather than stitching them.
+ * See docs/build-decisions.md#state-machine-noop.
  */
 
 'use client';

@@ -1,37 +1,10 @@
 'use client';
 
 /**
- * T020b — `useCopyImage()` clipboard hook.
- *
- * Source of truth: § 4 T020b / § 4c-4 copy catalogue / PRD FR-08 + AC-2.2 +
- * AC-2.4 + R-3.
- *
- * API:
- *   ```
- *   const { available, status, deniedMessage, copy } = useCopyImage(imageBase64);
- *   ```
- *
- * - `available`     — `false` at mount when `ClipboardItem` is `undefined`
- *                     (old browsers, locked-down contexts). Parents disable
- *                     the Copy pill from the outset in that case.
- * - `status`        — `"idle" | "copying" | "copied" | "denied" | "unsupported"`.
- *                     Drives the `<ActionPill>` state + any inline message
- *                     visibility.
- * - `deniedMessage` — stable string literal per § 4c-4: "Clipboard access was
- *                     blocked. Use Download instead." Exposed regardless of
- *                     current status so parents can render it by conditioning
- *                     on `status === 'denied' || status === 'unsupported'`.
- * - `copy()`        — decodes the base64 image into a PNG Blob, wraps it in
- *                     a `ClipboardItem({ 'image/png': blob })`, calls
- *                     `navigator.clipboard.write([item])`. On success flips
- *                     status to `"copied"` for 1.8 s, then back to `"idle"`.
- *                     On `DOMException` (or any rejection) flips to
- *                     `"denied"` — sticky for the session (no auto-revert,
- *                     per R-3). No-op when `!available`.
- *
- * The hook does not depend on React 19's use() API; it uses standard
- * `useState` + `useEffect` so the reducer is easy to reason about under
- * fake timers in tests.
+ * Clipboard hook. `available` is false at mount when `ClipboardItem` is
+ * undefined, so the parent can disable Copy from the outset; a denial is
+ * STICKY for the session with no auto-revert.
+ * See docs/build-decisions.md#copy-denied-sticky.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';

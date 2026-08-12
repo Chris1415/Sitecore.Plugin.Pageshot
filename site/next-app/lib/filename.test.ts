@@ -1,29 +1,7 @@
 /**
- * T021a-TEST-1..6 — `buildScreenshotFilename` sanitization helper.
- *
- * Contract (§ 4c-4 filename helper contract / PRD FR-09 / AC-3.2 / AC-3.3 /
- * AC-3.4):
- *
- *   signature: buildScreenshotFilename(siteName, pageName, capturedAt) → string
- *   steps:
- *     1. toLowerCase() both slugs.
- *     2. replace every run of non-[a-z0-9_-] with a single `-`.
- *     3. trim leading/trailing `-`.
- *     4. assemble `${siteSlug}_${pageSlug}_${YYYYMMDD}-${HHmm}.png` using
- *        LOCAL time (not UTC).
- *     5. if total length > 100, proportionally truncate siteSlug + pageSlug
- *        (preserve ≥ 1 char each) so the final string is ≤ 100 and the
- *        `.png` extension + timestamp suffix are preserved.
- *
- *   TEST-1: baseline ('acme','home',…) → 'acme_home_20260422-0942.png'.
- *   TEST-2: unicode + punctuation → lowercased, kebab, ASCII-only.
- *   TEST-3: emoji → '-'; runs collapsed; final matches /^[a-z0-9_-]+\.png$/.
- *   TEST-4: 200-char site + 200-char page → length ≤ 100, ends with '.png',
- *           timestamp preserved; both slugs kept proportional (≥ 1 char each).
- *   TEST-5: local time, not UTC — verified by passing a Date whose local HH:mm
- *           matches the expected timestamp regardless of TZ.
- *   TEST-6: minute-granularity collision — two calls within the same minute
- *           return an identical string.
+ * Filename contract: slug rules, LOCAL time (not UTC), proportional truncation
+ * past 100 chars preserving the timestamp, and minute-granularity collision by
+ * design. See docs/build-decisions.md#filename.
  */
 
 import { describe, it, expect } from 'vitest';

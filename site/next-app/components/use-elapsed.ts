@@ -1,33 +1,9 @@
 'use client';
 
 /**
- * T016b — `useElapsedTime(startedAt)` hook.
- *
- * Returns the elapsed integer seconds since `startedAt`, but only once the
- * **5-second threshold** has been crossed. Before the threshold the hook
- * returns `null` — the panel's sub-line is not rendered at all (§ 4c-4).
- *
- * Contract:
- *   - `startedAt: number | null` — `Date.now()`-style timestamp, or null when
- *     the panel is not in `capturing`. When null, the hook installs no timer
- *     and returns null immediately.
- *   - Return `null` while `Date.now() - startedAt < 5000`.
- *   - Return `Math.floor((Date.now() - startedAt) / 1000)` once at/past 5 s.
- *   - Ticks every 1 s until `startedAt` flips to null or the hook unmounts.
- *
- * Coupling with the panel state machine (T013) is intentional:
- *   - The panel dispatches `capture` and stores `startedAt` in the
- *     `capturing` state.
- *   - The panel reads `useElapsedTime(state.kind === 'capturing' ? state.startedAt : null)`
- *     and maps a non-null return to the "capturing-slow" visual state
- *     (§ 4c-4 label map) and to the LiveRegion "Still capturing, N seconds."
- *     announcement (T023 — out of Phase 1 scope).
- *
- * Implementation note — the elapsed value is stored in a ref and a single
- * state cell holds the value we want to render. The interval callback
- * computes `Date.now() - startedAt` and calls the state setter with the
- * clamped output. Render is a pure read of that state, no `Date.now()` at
- * render time.
+ * Elapsed seconds since `startedAt`, but only past the 5s threshold — below it
+ * the hook returns null and the sub-line is not rendered at all. No `Date.now()`
+ * at render time. See docs/build-decisions.md#elapsed-threshold.
  */
 
 import { useEffect, useState } from 'react';

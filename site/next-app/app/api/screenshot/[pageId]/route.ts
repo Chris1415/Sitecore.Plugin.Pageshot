@@ -1,29 +1,11 @@
 /**
- * `/api/screenshot/[pageId]` — server-side proxy for the SitecoreAI Agent API
- * page-screenshot endpoint.
+ * Server-side proxy for the SitecoreAI Agent page-screenshot endpoint.
  *
- * Contracts (see task-breakdown § 4c-6 / § 4c-4 / FR-06 / FR-07 / FR-13 /
- * NFR-S-01 / R-6 and the T011a test suite):
- *
- *   - Node runtime (ADR-0004). Edge runtime is NOT supported because the
- *     shared OAuth token cache in `@/lib/sitecore-token` relies on module-scope
- *     state that only Node's long-lived server instances preserve.
- *   - Validates `pageId` (trimmed non-empty) before touching any upstream.
- *   - Validates env (`SITECORE_DEPLOY_CLIENT_ID` / `SITECORE_DEPLOY_CLIENT_SECRET`)
- *     via `getSitecoreToken()` — a missing env raises `SitecoreTokenConfigError`
- *     without issuing any network request (FR-13 / T011a-TEST-7).
- *   - Tenant identifier logging happens INSIDE `lib/sitecore-token.ts` on every
- *     fresh cold-cache fetch (§ 4c-6 "on first successful auth"). The route
- *     never logs the bearer token or client secret (NFR-S-01 / R-6).
- *   - On upstream 401, invalidates the cached token, refetches, and retries the
- *     Agent API request EXACTLY ONCE (auth.md § 6 / FR-06).
- *   - Maps upstream outcomes to the `ScreenshotResponse` envelope:
- *       200 → `{ ok: true, image }` (bare base64 — no data-URL wrapping).
- *       404 → `{ code: 'not_found' }` with the save-first subtitle.
- *       5xx → `{ code: 'upstream_unavailable' }`.
- *       double 401 → `{ code: 'auth' }` with the admin-credentials subtitle.
- *       fetch TypeError → `{ code: 'network' }`.
- *       AbortError / unknown → `{ code: 'upstream_unavailable' | 'unknown' }`.
+ * Node runtime, not Edge — the shared OAuth token cache is module-scope state
+ * that only long-lived Node instances preserve. On a 401 the cached token is
+ * invalidated and the request retried EXACTLY once. Every upstream outcome maps
+ * to one envelope; the route never logs the bearer token or client secret.
+ * See docs/build-decisions.md#node-runtime.
  */
 
 import {

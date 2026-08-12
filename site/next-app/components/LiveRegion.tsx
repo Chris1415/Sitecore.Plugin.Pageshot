@@ -1,34 +1,10 @@
 'use client';
 
 /**
- * T023b — `<LiveRegion>` accessibility announcer.
- *
- * Source of truth: § 4 T023b / § 4c-4 "Announcement catalogue" / PRD NFR-A-01 /
- * POC v2 `#live-region`.
- *
- * This module exposes four things:
- *
- *   - `<LiveRegionProvider>` — React context wrapping the panel tree. Holds
- *                              the current announcement message + an
- *                              `announce(msg)` callback.
- *   - `<LiveRegion>`         — the sr-only `role="status"` + `aria-live="polite"`
- *                              DOM node that assistive tech reads. Renders the
- *                              most recent message; most-recent-wins semantics.
- *   - `useAnnounce()`        — returns the `announce(msg: string) => void`
- *                              callback that any child can call on state
- *                              transitions (reducer, copy hook, download hook).
- *   - `ANNOUNCEMENTS`        — the seven exact catalogue entries from § 4c-4.
- *                              Strings are literal constants; builders
- *                              (`stillCapturing(n)`, `captureFailed(code)`)
- *                              substitute their parameter into the template
- *                              using the `<PanelErrorCode>` → title/subtitle
- *                              lookup already exported by `<PolaroidCard>`.
- *
- * Accessibility contract (§ 4c-4 "Accessibility"):
- *   - Single sr-only `<div role="status" aria-live="polite">` receives all
- *     announcements.
- *   - Polite (not assertive) — the panel's actions are never blocking, so
- *     screen readers should queue messages after the current utterance.
+ * The panel's single sr-only `role="status" aria-live="polite"` announcer,
+ * its provider, the `useAnnounce()` hook, and the seven exact catalogue
+ * strings. Most-recent-wins: a second announce REPLACES the first.
+ * See docs/build-decisions.md#live-region.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';

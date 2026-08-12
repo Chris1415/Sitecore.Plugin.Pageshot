@@ -1,32 +1,10 @@
 /**
- * Client-side whitespace / padding auto-trim.
- *
- * Why this exists (T029 dogfood): the Agent API's `/screenshot` endpoint has
- * no `fullPage=true` toggle. `height` is the exact output-image height —
- * shorter pages get padded at the bottom with the site's background color.
- * Picking a "big enough" height preset (Large/Full) reliably captures the
- * whole page but produces a long strip of padding below the real content.
- *
- * This module strips that trailing padding. It:
- *
- *   1. Loads the PNG into an `HTMLImageElement`.
- *   2. Samples the bottom-left + bottom-right pixels. If they don't match
- *      (within tolerance), there's no obvious single-color padding — return
- *      the original image untouched.
- *   3. Scans rows bottom → top, sampling ~20 points across each row. The
- *      first row that contains a pixel differing from the padding color by
- *      more than `tolerance` is the last content row.
- *   4. If a trim is found and it's substantive (> 2% of height, and the
- *      trimmed height is still ≥ 100 px), crops the canvas and re-encodes
- *      as PNG.
- *
- * Safety guards keep this from accidentally over-trimming a page with a
- * genuinely solid-color bottom section (e.g. a footer with a CTA on a
- * uniform background). The 2% threshold means small trims are skipped; the
- * 100 px floor prevents the function from ever returning a tiny sliver.
- *
- * When the browser has no canvas context (SSR / test env), the function
- * returns the original base64 unchanged — never throws.
+ * Client-side trim of the bottom padding the Agent API leaves on short pages —
+ * its /screenshot endpoint has no fullPage toggle, so `height` is the exact
+ * output height. Refuses to guess: mismatched corner samples return the image
+ * untouched, and two guards (>2% of height, result >=100px) stop it eating a
+ * genuinely solid-colour footer. Never throws.
+ * See docs/build-decisions.md#trim-image.
  */
 
 type RGB = readonly [number, number, number];
