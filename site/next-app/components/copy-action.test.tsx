@@ -1,33 +1,7 @@
 /**
- * T020a-TEST-1..4 — Copy-to-clipboard action + denied fallback.
- *
- * Behavior under test (§ 4 T020a / § 4c-4 / FR-08 / AC-2.2 / AC-2.4 / R-3 /
- * POC v2 Copy pill):
- *
- *   TEST-1: successful copy writes a single-element array to
- *           `navigator.clipboard.write`. The element is a `ClipboardItem`
- *           containing an `image/png` Blob. The Blob's first 8 bytes match
- *           the PNG magic number `\x89 P N G \r \n \x1A \n` = hex
- *           `89 50 4E 47 0D 0A 1A 0A` (§ 4c-4 "PNG magic bytes").
- *   TEST-2: after resolution the hook's `status` transitions to `"copied"`
- *           for 1.8 s, then reverts to `"idle"`. (Parent wires this into
- *           `<ActionPill state="success">`.)
- *   TEST-3: permission denied (`DOMException('NotAllowedError')` / generic
- *           rejection) transitions `status` to `"denied"` and exposes
- *           `deniedMessage` = EXACT "Clipboard access was blocked. Use
- *           Download instead." The denied state is sticky for the session.
- *   TEST-4: `global.ClipboardItem` undefined → hook returns
- *           `{ available: false, status: 'unsupported' }` so the parent can
- *           disable Copy from the outset and surface the same inline message.
- *
- * The hook under test (`useCopyImage`) exposes:
- *   ```
- *   const { available, status, deniedMessage, copy } = useCopyImage(imageBase64);
- *   // available:       boolean — false when ClipboardItem is undefined at module init
- *   // status:          "idle" | "copying" | "copied" | "denied" | "unsupported"
- *   // deniedMessage:   stable string constant ("Clipboard access was blocked. Use Download instead.")
- *   // copy():          () => Promise<void> — no-op when !available
- *   ```
+ * Copy hook contract. Asserts PNG magic bytes on the written blob rather than
+ * merely that something was written, and that a denial is sticky.
+ * See docs/build-decisions.md#copy-denied-sticky.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,35 +1,8 @@
 /**
- * T024a-TEST-1..5 — `<PageshotPanel>` keyboard + focus map (RED).
- *
- * Per § 10 T024a-TEST-* and § 4c-4 "Keyboard & focus map". These tests
- * exercise the focus-management contract the panel must honour; they fail
- * on the T019 composition because the focus moves are owned by T024b and
- * not yet wired.
- *
- * Harness:
- *   - `@sitecore-marketplace-sdk/client` is `vi.mock`-ed so `ClientSDK.init`
- *     returns a stub whose `query` function is driven per-test. The
- *     `pages.context` subscription captures its `onSuccess` callback; tests
- *     invoke it to deliver a canonical page context event.
- *   - `global.fetch` is swapped via `installFetchMock` so
- *     `/api/screenshot/...` responses come from fixtures.
- *   - `<PageshotPanel>` is rendered inside the real `<MarketplaceProvider>`
- *     so the production `usePagesContext()` path is exercised.
- *
- * T025-TEST-1..6 land in a subsequent commit (post-T024b GREEN) and extend
- * this file with end-to-end golden-path scenarios. Keeping T024a tests
- * isolated here produces a clean RED → GREEN → INTEGRATION history.
- *
- * Behavior under test — T024a (§ 4c-4):
- *   T024a-TEST-1: Shutter is `document.activeElement` after first non-null
- *                 pages.context.
- *   T024a-TEST-2: capturing → ready moves focus to the Copy pill with
- *                 `{ preventScroll: true }`.
- *   T024a-TEST-3: capturing → error moves focus to the Retry pill.
- *   T024a-TEST-4: Escape anywhere inside the panel returns focus to the
- *                 Shutter.
- *   T024a-TEST-5: Tab order = DOM order (Shutter → Copy → Download in
- *                 ready; Shutter → Retry in error).
+ * Keyboard and focus-map contract, rendered inside the REAL provider so the
+ * production context path is exercised. Kept isolated from the later
+ * golden-path scenarios to preserve a genuine RED -> GREEN history.
+ * See docs/build-decisions.md#focus-map.
  */
 
 import {

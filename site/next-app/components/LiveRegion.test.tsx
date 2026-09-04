@@ -1,38 +1,7 @@
 /**
- * T023a-TEST-1..3 — `<LiveRegion>` accessibility announcer.
- *
- * Behavior under test (§ 4 T023a / § 4c-4 "Announcement catalogue" / PRD
- * NFR-A-01 / POC v2 `#live-region`):
- *
- *   TEST-1: renders a single DOM node with `role="status"`,
- *           `aria-live="polite"`, `.sr-only` class (Tailwind v4 visually-hidden
- *           utility). The region itself carries no visible layout — it lives
- *           at panel root for announcements only.
- *   TEST-2: calling `announce(msg)` updates the region's text content. A
- *           second `announce()` call replaces the previous message (most
- *           recent wins — assistive tech announces changes, not accumulation).
- *   TEST-3: table-driven — each of the seven § 4c-4 state-change announcements
- *           fires with the EXACT wording the catalogue prescribes. The seven
- *           messages are:
- *             - "Ready to capture."           (panel mount with valid context)
- *             - "Capturing started."          (idle → capturing)
- *             - "Still capturing, N seconds." (each second past 5s)
- *             - "Screenshot ready."           (capturing → ready)
- *             - "Copied to clipboard."        (copy success)
- *             - "Download started."           (download click)
- *             - "Capture failed: <title>. <subtitle>."  (capturing → error, 5 codes)
- *
- * The component exposes:
- *   - `<LiveRegionProvider>` — React context provider wrapping children; owns
- *     the current announcement message state and exposes an `announce(msg)`
- *     callback via `useAnnounce()`.
- *   - `<LiveRegion>`         — the sr-only status region itself. Renders the
- *     most recent message from the context.
- *   - `useAnnounce()`        — hook returning the `announce(msg: string) => void`
- *     callback for components (state machine, copy hook, download hook) to
- *     call on transitions.
- *   - `ANNOUNCEMENTS`        — constants + builder functions for the seven
- *     catalogue entries.
+ * The announcer's contract: one sr-only polite region, most-recent-wins, and
+ * the seven catalogue strings asserted at their EXACT wording.
+ * See docs/build-decisions.md#live-region.
  */
 
 import { describe, it, expect } from 'vitest';
